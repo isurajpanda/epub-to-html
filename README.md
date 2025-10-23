@@ -10,7 +10,7 @@ This project is a Python-based tool for converting EPUB files into standalone HT
 *   **Image Handling**: Images are extracted and embedded in the HTML file.
 *   **Custom CSS**: Users can provide a custom CSS file to style the output HTML.
 
-## How to Use
+## Usage
 
 1.  **Install Dependencies**: Install the necessary dependencies by running the following command:
 
