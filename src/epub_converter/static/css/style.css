@@ -49,30 +49,23 @@ html, body {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(var(--vh, 1vh) * 100 - var(--topbar-height));
+    /* Content wrapper naturally starts below the fixed top bar */
+    margin-top: var(--topbar-height);
     /* Keep content-wrapper free of transforms so fixed-position children
        (like the top toolbar/right-controls) remain fixed to the viewport.
        Transforms will be applied to #main-content instead. */
 }
-/* Make room for the fixed top toolbar so content isn't hidden underneath */
-#content-wrapper {
-    padding-top: var(--topbar-height);
-}
 
-/* When in fullscreen mode we hide the top toolbar and remove the top
-   padding so content can occupy the full viewport. JS will toggle
-   the `is-fullscreen` class on `#app-container` to control this state. */
+/* When in fullscreen mode we hide the top toolbar and remove the margin */
 .is-fullscreen #content-wrapper {
-    padding-top: 0;
-}
-.is-fullscreen #main-content {
-    /* ensure anchor scrolling doesn't push content under toolbar when exiting */
-    scroll-padding-top: 0;
+    margin-top: 0;
+    height: calc(var(--vh, 1vh) * 100);
 }
 
-/* Smooth transition when toggling fullscreen so layout adjustments feel natural */
+/* Smooth transition when toggling fullscreen */
 #content-wrapper {
-    transition: padding-top 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition: margin-top 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 #app-container.sidebar-open #sidebar-container {
     transform: translateX(0);
@@ -88,24 +81,37 @@ html, body {
 }
 #main-content {
     overflow-y: auto;
-    overflow-x: hidden; /* Prevent horizontal scrolling */
+    overflow-x: hidden;
     flex-grow: 1;
     padding: 1rem;
     box-sizing: border-box;
-    -webkit-overflow-scrolling: touch; /* smooth touch scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
     will-change: scroll-position, transform;
-    /* Allow the main content to be transformed when the sidebar opens. */
+    /* Allow the main content to be transformed when the sidebar opens */
     transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
-    will-change: transform;
-    /* Ensure in-page jumps and anchor scrolling account for the fixed toolbar
-       so the top of content isn't hidden beneath it. Add a small extra gap. */
-    scroll-padding-top: calc(var(--topbar-height) + 10px);
+    /* Ensure anchor scrolling accounts for the fixed toolbar */
+    scroll-padding-top: 10px;
     /* Use CSS Grid for perfect centering */
     display: grid;
     grid-template-columns: 1fr;
     justify-items: center;
     align-content: start;
+    position: relative;
+    z-index: 1;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    #main-content {
+        padding: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    #main-content {
+        padding: 0.25rem;
+    }
 }
 
 .toc-view {
@@ -114,25 +120,32 @@ html, body {
 
 /* Scrollbar Styles */
 
-/* Sleek mobile scrollbar */
+/* Prominent but sleek mobile scrollbar */
 @media (max-width: 768px) {
     #main-content::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
+        width: 8px;
+        height: 8px;
     }
     
     #main-content::-webkit-scrollbar-track {
-        background: transparent;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
     }
     
     #main-content::-webkit-scrollbar-thumb {
-        background-color: rgba(255, 255, 255, 0.15);
-        border-radius: 3px;
-        transition: background-color 0.2s ease;
+        background-color: rgba(255, 255, 255, 0.3);
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: background-color 0.2s ease, border-color 0.2s ease;
     }
     
     #main-content::-webkit-scrollbar-thumb:hover {
-        background-color: rgba(255, 255, 255, 0.25);
+        background-color: rgba(255, 255, 255, 0.45);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    #main-content::-webkit-scrollbar-thumb:active {
+        background-color: rgba(255, 255, 255, 0.5);
     }
     
     #main-content::-webkit-scrollbar-corner {
@@ -142,7 +155,7 @@ html, body {
     /* Fallback for browsers that don't support webkit scrollbar */
     #main-content {
         scrollbar-width: thin;
-        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+        scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.05);
     }
 }
 
@@ -197,9 +210,7 @@ html, body {
     /* Responsive width that scales with viewport and font size */
     width: min(48rem, 90vw);
     max-width: 48rem;
-    /* Add a small top gap inside the content body so the very first element
-       isn't visually tucked under the fixed top toolbar. */
-    padding: 1rem 1.5rem;
+    padding: 1.5rem;
     font-size: clamp(1rem, 1.2rem, 1.5rem);
     /* Ensure content doesn't overflow horizontally on mobile */
     word-wrap: break-word;
@@ -230,50 +241,34 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
     overflow-wrap: break-word;
 }
 
-/* Responsive font size adjustments - simplified approach */
+/* Mobile content positioning and font sizing */
 @media (max-width: 768px) {
     .content-body {
-        width: min(48rem, 90vw);
-        padding: 1rem 1rem;
+        width: min(48rem, 95vw);
+        padding: 0.75rem;
     }
     
-    /* Progressive width reduction for larger fonts */
-    .content-body.text-lg { width: min(42rem, 88vw); }
-    .content-body.text-xl { width: min(38rem, 86vw); }
-    .content-body.text-2xl { width: min(34rem, 84vw); }
-    .content-body.text-3xl { width: min(30rem, 82vw); }
-    .content-body.text-4xl { width: min(26rem, 80vw); }
-    .content-body.text-5xl { width: min(22rem, 78vw); }
+    /* Font size responsive widths */
+    .content-body.text-lg { width: min(42rem, 93vw); }
+    .content-body.text-xl { width: min(38rem, 91vw); }
+    .content-body.text-2xl { width: min(34rem, 89vw); }
+    .content-body.text-3xl { width: min(30rem, 87vw); }
+    .content-body.text-4xl { width: min(26rem, 85vw); }
+    .content-body.text-5xl { width: min(22rem, 83vw); }
 }
 
 @media (max-width: 480px) {
     .content-body {
-        width: min(48rem, 88vw);
-        padding: 1rem 0.75rem;
+        width: min(48rem, 94vw);
+        padding: 0.5rem;
     }
     
-    /* More aggressive width reduction for mobile */
-    .content-body.text-lg { width: min(38rem, 86vw); }
-    .content-body.text-xl { width: min(34rem, 84vw); }
-    .content-body.text-2xl { width: min(30rem, 82vw); }
-    .content-body.text-3xl { width: min(26rem, 80vw); }
-    .content-body.text-4xl { width: min(22rem, 78vw); }
-    .content-body.text-5xl { width: min(18rem, 76vw); }
-}
-
-@media (max-width: 360px) {
-    .content-body {
-        width: min(48rem, 85vw);
-        padding: 1rem 0.5rem;
-    }
-    
-    /* Maximum constraint for very small screens */
-    .content-body.text-lg { width: min(34rem, 84vw); }
-    .content-body.text-xl { width: min(30rem, 82vw); }
-    .content-body.text-2xl { width: min(26rem, 80vw); }
-    .content-body.text-3xl { width: min(22rem, 78vw); }
-    .content-body.text-4xl { width: min(18rem, 76vw); }
-    .content-body.text-5xl { width: min(16rem, 74vw); }
+    .content-body.text-lg { width: min(38rem, 92vw); }
+    .content-body.text-xl { width: min(34rem, 90vw); }
+    .content-body.text-2xl { width: min(30rem, 88vw); }
+    .content-body.text-3xl { width: min(26rem, 86vw); }
+    .content-body.text-4xl { width: min(22rem, 84vw); }
+    .content-body.text-5xl { width: min(18rem, 82vw); }
 }
 
 @media (min-width: 1200px) {

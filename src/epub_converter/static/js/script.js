@@ -70,12 +70,40 @@ document.addEventListener('DOMContentLoaded', () => {
     const APP_DATA = JSON.parse(document.getElementById('app-data').textContent);
     console.log("APP_DATA:", APP_DATA);
 
-    const contentIdMapping = APP_DATA.content_id_mapping || {};
+    // No redirect - / stays as /
+    let isRedirected = false;
 
+    // Get DOM elements first
     const appContainer = document.getElementById('app-container');
     const sidebarContainer = document.getElementById('sidebar-container');
     const topbarContainer = document.getElementById('topbar-container');
     const mainContent = document.getElementById('main-content');
+
+    // Dynamic viewport height for mobile browsers
+    const setViewportHeight = () => {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+    
+    // Set initial viewport height and listen for changes
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(setViewportHeight, 100);
+    });
+
+    // Utility function for instant navigation without scrolling
+    const scrollToElement = (element, smooth = false) => {
+        if (!element) return;
+        
+        const topbarHeight = topbarContainer.offsetHeight;
+        const scrollPosition = Math.max(0, element.offsetTop - topbarHeight);
+        
+        // Instant scroll without animation
+        mainContent.scrollTo(0, scrollPosition);
+    };
+
+    const contentIdMapping = APP_DATA.content_id_mapping || {};
     
     // --- Handlers ---
     const toggleSidebar = () => appContainer.classList.toggle('sidebar-open');
@@ -128,8 +156,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         if (targetChapter) {
-            // Scroll to chapter position minus top bar height plus some padding
-            mainContent.scrollTo(0, targetChapter.offsetTop - topbarHeight - 10);
+            scrollToElement(targetChapter, false);
         }
     };
 
@@ -289,9 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (targetElement) {
-            // Use mainContent for scrolling with proper top bar offset
-            const topbarHeight = topbarContainer.offsetHeight;
-            mainContent.scrollTo(0, targetElement.offsetTop - topbarHeight - 10);
+            scrollToElement(targetElement, false);
         }
         if (window.innerWidth < 768) {
             toggleSidebar();
@@ -299,75 +324,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Keyboard Controls (optimized) ---
-    let scrollAnimation = null;
-    let isKeyHeld = false;
-    const scrollSpeed = 25; // pixels per RAF frame for continuous scroll
-    const scrollAmount = 300; // Pixels to scroll per key press
-    let topbarHeight = topbarContainer.offsetHeight;
-
-    // Update topbar height on resize (responsive)
-    const handleResize = () => { topbarHeight = topbarContainer.offsetHeight; };
-    window.addEventListener('resize', handleResize, { passive: true });
-
-    // Prefer native smooth scroll when available (offloads to browser compositor)
-    const supportsNativeSmooth = 'scrollBehavior' in document.documentElement.style;
-
-    const smoothScrollTo = (targetY, duration = 300) => {
-        // Use native smooth scroll where possible - it's usually smoother and less janky
-        if (supportsNativeSmooth) {
-            try {
-                mainContent.scrollTo({ top: targetY, behavior: 'smooth' });
-                return;
-            } catch (e) {
-                /* fall through to JS animation if unsupported */
-            }
-        }
-
-        if (scrollAnimation) cancelAnimationFrame(scrollAnimation);
-        const startY = mainContent.scrollTop;
-        const distance = targetY - startY;
-        const startTime = performance.now();
-
-        const animate = (currentTime) => {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-            mainContent.scrollTop = startY + (distance * easeOutQuart);
-            if (progress < 1) scrollAnimation = requestAnimationFrame(animate);
-        };
-
-        scrollAnimation = requestAnimationFrame(animate);
-    };
-
-    const smoothScrollBy = (deltaY) => smoothScrollTo(mainContent.scrollTop + deltaY);
-
-    // Continuous scrolling using requestAnimationFrame with time-based delta for smoothness
-    let continuousScrollRunning = false;
-    let continuousDirection = null;
-    let lastRAF = null;
-    const speedPerSecond = 600; // pixels per second - tuned for smoothness
-
-    const continuousStep = (timestamp) => {
-        if (!continuousScrollRunning) { lastRAF = null; return; }
-        if (!lastRAF) lastRAF = timestamp;
-        const delta = timestamp - lastRAF;
-        lastRAF = timestamp;
-        const pixels = Math.round((speedPerSecond * delta) / 1000);
-        if (continuousDirection === 'up') mainContent.scrollBy(0, -pixels);
-        else mainContent.scrollBy(0, pixels);
-        requestAnimationFrame(continuousStep);
-    };
-
-    const startContinuousScroll = (direction) => {
-        if (continuousScrollRunning) return;
-        continuousDirection = direction;
-        continuousScrollRunning = true;
-        lastRAF = null;
-        requestAnimationFrame(continuousStep);
-    };
-
-    const stopContinuousScroll = () => { continuousScrollRunning = false; isKeyHeld = false; lastRAF = null; };
-
     const handleKeyDown = (event) => {
         // Don't handle keyboard shortcuts when typing in input fields
         if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.contentEditable === 'true')) {
@@ -377,22 +333,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const key = (event.key || '').toLowerCase();
 
         // Prevent default for our handled keys
-        if (['w','s','a','d','f','t',' ','arrowup','arrowdown','arrowleft','arrowright','pageup','pagedown','home','end'].includes(key)) {
+        if (['a','d','arrowleft','arrowright','f','t'].includes(key)) {
             event.preventDefault();
         }
 
-        if (isKeyHeld) return;
-        isKeyHeld = true;
-
         switch (key) {
-            case 'w': case 'arrowup':
-                smoothScrollBy(-scrollAmount);
-                startContinuousScroll('up');
-                break;
-            case 's': case 'arrowdown':
-                smoothScrollBy(scrollAmount);
-                startContinuousScroll('down');
-                break;
             case 'a': case 'arrowleft':
                 navigateChapter('prev');
                 break;
@@ -405,39 +350,11 @@ document.addEventListener('DOMContentLoaded', () => {
             case 't':
                 toggleFontSize();
                 break;
-            case ' ': // Spacebar for page down
-                smoothScrollBy(mainContent.clientHeight * 0.8);
-                break;
-            case 'pageup':
-                smoothScrollBy(-mainContent.clientHeight * 0.8);
-                break;
-            case 'pagedown':
-                smoothScrollBy(mainContent.clientHeight * 0.8);
-                break;
-            case 'home':
-                smoothScrollTo(0);
-                break;
-            case 'end':
-                smoothScrollTo(mainContent.scrollHeight);
-                break;
         }
-    };
-
-    const handleKeyUp = (event) => {
-        const key = (event.key || '').toLowerCase();
-        if (['w','s','arrowup','arrowdown'].includes(key)) stopContinuousScroll();
-        if (['a','d','f','t',' ','arrowleft','arrowright','pageup','pagedown','home','end'].includes(key)) isKeyHeld = false;
     };
 
     // Add keyboard event listeners
     document.addEventListener('keydown', handleKeyDown, { passive: false });
-    document.addEventListener('keyup', handleKeyUp, { passive: true });
-
-    // Clean up on page unload
-    window.addEventListener('beforeunload', () => {
-        if (scrollAnimation) cancelAnimationFrame(scrollAnimation);
-        continuousScrollRunning = false;
-    });
     
     // --- UI Initialization ---
     const tocPanel = createTocPanel({
@@ -465,68 +382,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Scrollspy for URL Hash (IntersectionObserver with scroll fallback) ---
-    const scrollTargets = Array.from(mainContent.querySelectorAll('div.chapter[id], h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'));
-
-    if (scrollTargets.length === 0) return; // nothing to observe
-
-    let activeHashId = null;
-
-    if ('IntersectionObserver' in window) {
-        const io = new IntersectionObserver((entries) => {
-            // Pick the entry with the largest intersectionRatio that's intersecting
-            let candidates = entries.filter(e => e.isIntersecting && e.target.id);
-            if (candidates.length === 0) return;
-            candidates.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-            const best = candidates[0].target.id;
-            if (best && best !== activeHashId) {
-                activeHashId = best;
-                history.replaceState(null, '', '#' + best);
-            }
-        }, {
-            root: mainContent,
-            rootMargin: '0px 0px -60% 0px',
-            threshold: [0, 0.25, 0.5, 0.75, 1]
-        });
-
-        scrollTargets.forEach(t => io.observe(t));
-
-        // Prime the hash to the first visible target quickly
-        // find first target that intersects initial viewport
-        for (const t of scrollTargets) {
-            const rect = t.getBoundingClientRect();
-            if (rect.top < window.innerHeight * 0.3) { activeHashId = t.id; break; }
-        }
-        if (activeHashId) history.replaceState(null, '', '#' + activeHashId);
-    } else {
-        // Fallback: debounced rAF-based scroll handler to avoid layout thrash
-        let rafPending = false;
-        const doUpdateHash = () => {
-            rafPending = false;
-            const buffer = window.innerHeight * 0.3;
-            let closestTarget = null;
-            for (let i = scrollTargets.length - 1; i >= 0; i--) {
-                if (scrollTargets[i].getBoundingClientRect().top < buffer) {
-                    closestTarget = scrollTargets[i];
-                    break;
-                }
-            }
-            if (!closestTarget && scrollTargets.length > 0) closestTarget = scrollTargets[0];
-            if (closestTarget && location.hash !== '#' + closestTarget.id) {
-                history.replaceState(null, '', '#' + closestTarget.id);
-            }
-        };
-
-        const onScroll = () => {
-            if (rafPending) return;
-            rafPending = true;
-            requestAnimationFrame(doUpdateHash);
-        };
-
-        mainContent.addEventListener('scroll', onScroll, { passive: true });
-        // initial
-        doUpdateHash();
-    }
+    // --- Scrollspy for URL Hash - DISABLED ---
+    // All scrollspy functionality disabled to prevent any scroll interference
 
     // --- Image lazy-loading improvements ---
     function enableLazyLoadingImages() {
@@ -547,5 +404,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     enableLazyLoadingImages();
+
+    // Ensure consistent initial scroll position
+    const initializeScrollPosition = () => {
+        if (window.location.hash) {
+            const targetElement = document.querySelector(window.location.hash);
+            scrollToElement(targetElement);
+        } else {
+            // Ensure we start at the top consistently
+            mainContent.scrollTo(0, 0);
+        }
+    };
+
+    // Initialize scroll position
+    initializeScrollPosition();
 });
 // --- END: Application Logic ---
