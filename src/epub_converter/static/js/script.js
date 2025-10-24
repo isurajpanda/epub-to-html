@@ -151,54 +151,111 @@ document.addEventListener('DOMContentLoaded', () => {
         const topbarContainer = document.getElementById('topbar-container');
         const mainContent = document.getElementById('main-content');
         
-        if (!document.fullscreenElement && 
-            !document.webkitFullscreenElement && 
-            !document.mozFullScreenElement && 
-            !document.msFullscreenElement) {
-            // Enter fullscreen
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen();
-            } else if (document.documentElement.webkitRequestFullscreen) {
-                document.documentElement.webkitRequestFullscreen();
-            } else if (document.documentElement.mozRequestFullScreen) {
-                document.documentElement.mozRequestFullScreen();
-            } else if (document.documentElement.msRequestFullscreen) {
-                document.documentElement.msRequestFullscreen();
+        // Use async-friendly fullscreen requests and rely on the
+        // fullscreenchange event for final state; set classes proactively
+        // so UI updates immediately on success. Use feature-detection and
+        // vendor fallbacks where necessary.
+        const appContainer = document.getElementById('app-container');
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+
+        const enter = async () => {
+            try {
+                const el = document.documentElement;
+                if (el.requestFullscreen) await el.requestFullscreen();
+                else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                else if (el.mozRequestFullScreen) await el.mozRequestFullScreen();
+                else if (el.msRequestFullscreen) await el.msRequestFullscreen();
+                // optimistic UI update — the fullscreenchange handler will ensure final state
+                appContainer.classList.add('is-fullscreen');
+                // add class to the actual toolbar element (child) so CSS selector matches
+                const topToolbar = topbarContainer.querySelector('.top-toolbar');
+                if (topToolbar) topToolbar.classList.add('fullscreen-hidden');
+                // start a polling fallback for mobile/webview to detect exit
+                startFullscreenPoll();
+                // safety: ensure final state sync after short delays (mobile browsers
+                // can be flaky with fullscreenchange events)
+                setTimeout(handleFullscreenChange, 250);
+                setTimeout(handleFullscreenChange, 1000);
+            } catch (e) {
+                console.warn('Failed to enter fullscreen', e);
             }
-            topbarContainer.classList.add('fullscreen-hidden');
-            mainContent.style.paddingTop = '0';
-        } else {
-            // Exit fullscreen
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            } else if (document.mozCancelFullScreen) {
-                document.mozCancelFullScreen();
-            } else if (document.msExitFullscreen) {
-                document.msExitFullscreen();
+        };
+
+        const exit = async () => {
+            try {
+                if (document.exitFullscreen) await document.exitFullscreen();
+                else if (document.webkitExitFullscreen) await document.webkitExitFullscreen();
+                else if (document.mozCancelFullScreen) await document.mozCancelFullScreen();
+                else if (document.msExitFullscreen) await document.msExitFullscreen();
+                // optimistic UI update
+                appContainer.classList.remove('is-fullscreen');
+                const topToolbar = topbarContainer.querySelector('.top-toolbar');
+                if (topToolbar) topToolbar.classList.remove('fullscreen-hidden');
+                // stop polling if we were polling
+                stopFullscreenPoll();
+                setTimeout(handleFullscreenChange, 250);
+                setTimeout(handleFullscreenChange, 1000);
+            } catch (e) {
+                console.warn('Failed to exit fullscreen', e);
             }
-            topbarContainer.classList.remove('fullscreen-hidden');
-            mainContent.style.paddingTop = '20px';
-        }
+        };
+
+        if (!isFs) enter(); else exit();
     };
 
     // Handle fullscreen change events
     const handleFullscreenChange = () => {
         const topbarContainer = document.getElementById('topbar-container');
-        const mainContent = document.getElementById('main-content');
+        const appContainer = document.getElementById('app-container');
         const isFullscreen = !!(document.fullscreenElement || 
                                       document.webkitFullscreenElement || 
                                       document.mozFullScreenElement || 
                                       document.msFullscreenElement);
-        
+
+        const topToolbar = topbarContainer && topbarContainer.querySelector('.top-toolbar');
+
         if (isFullscreen) {
-            topbarContainer.classList.add('fullscreen-hidden');
-            mainContent.style.paddingTop = '0';
+            appContainer.classList.add('is-fullscreen');
+            if (topToolbar) topToolbar.classList.add('fullscreen-hidden');
         } else {
-            topbarContainer.classList.remove('fullscreen-hidden');
-            mainContent.style.paddingTop = '20px';
+            appContainer.classList.remove('is-fullscreen');
+            if (topToolbar) topToolbar.classList.remove('fullscreen-hidden');
+            // ensure any polling is stopped when we detect exit
+            stopFullscreenPoll();
         }
+        // The CSS handles padding/layout for .is-fullscreen, avoid inline styles
+        // Force a reflow to ensure the UI updates correctly, especially on mobile.
+        if (topToolbar) {
+            topToolbar.style.display = 'none';
+            topToolbar.offsetHeight; // Trigger a reflow
+            topToolbar.style.display = '';
+        }
+    };
+
+    // Polling fallback for mobile/webview where fullscreenchange may not fire
+    let _fullscreenPollId = null;
+    let _fullscreenPollTimeout = null;
+    const startFullscreenPoll = () => {
+        if (_fullscreenPollId) return;
+        _fullscreenPollId = setInterval(() => {
+            const isFsNow = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+            if (!isFsNow) {
+                // exited fullscreen, sync state and stop polling
+                handleFullscreenChange();
+                clearInterval(_fullscreenPollId);
+                _fullscreenPollId = null;
+                if (_fullscreenPollTimeout) { clearTimeout(_fullscreenPollTimeout); _fullscreenPollTimeout = null; }
+            }
+        }, 300);
+        // Safety timeout: stop polling after 10s to avoid leaks
+        _fullscreenPollTimeout = setTimeout(() => {
+            if (_fullscreenPollId) { clearInterval(_fullscreenPollId); _fullscreenPollId = null; }
+            _fullscreenPollTimeout = null;
+        }, 10000);
+    };
+    const stopFullscreenPoll = () => {
+        if (_fullscreenPollId) { clearInterval(_fullscreenPollId); _fullscreenPollId = null; }
+        if (_fullscreenPollTimeout) { clearTimeout(_fullscreenPollTimeout); _fullscreenPollTimeout = null; }
     };
 
     // Add event listeners for all fullscreen change events
@@ -206,6 +263,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    // Mobile/browser quirks: listen to visibility, orientation and resize events
+    // to recover toolbar state when fullscreenchange might not fire.
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) handleFullscreenChange(); });
+    window.addEventListener('orientationchange', handleFullscreenChange);
+    window.addEventListener('resize', handleFullscreenChange);
+    window.addEventListener('focus', handleFullscreenChange);
+    window.addEventListener('resize', handleFullscreenChange);
 
     const handleTocClick = (item) => {
         if (!item.href) return;

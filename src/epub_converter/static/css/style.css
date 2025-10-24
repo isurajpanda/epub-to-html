@@ -13,6 +13,8 @@
     --separator-color: #444;
     --sidebar-width: 320px;
     --topbar-height: 48px;
+    /* The nominal maximum content width; updated in larger breakpoints. */
+    --content-max: 48rem;
 }
 html, body {
     margin: 0;
@@ -56,6 +58,22 @@ html, body {
 #content-wrapper {
     padding-top: var(--topbar-height);
 }
+
+/* When in fullscreen mode we hide the top toolbar and remove the top
+   padding so content can occupy the full viewport. JS will toggle
+   the `is-fullscreen` class on `#app-container` to control this state. */
+.is-fullscreen #content-wrapper {
+    padding-top: 0;
+}
+.is-fullscreen #main-content {
+    /* ensure anchor scrolling doesn't push content under toolbar when exiting */
+    scroll-padding-top: 0;
+}
+
+/* Smooth transition when toggling fullscreen so layout adjustments feel natural */
+#content-wrapper {
+    transition: padding-top 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
 #app-container.sidebar-open #sidebar-container {
     transform: translateX(0);
 }
@@ -70,6 +88,7 @@ html, body {
 }
 #main-content {
     overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
     flex-grow: 1;
     padding: 1rem;
     box-sizing: border-box;
@@ -82,6 +101,11 @@ html, body {
     /* Ensure in-page jumps and anchor scrolling account for the fixed toolbar
        so the top of content isn't hidden beneath it. Add a small extra gap. */
     scroll-padding-top: calc(var(--topbar-height) + 10px);
+    /* Use CSS Grid for perfect centering */
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    align-content: start;
 }
 
 .toc-view {
@@ -90,14 +114,35 @@ html, body {
 
 /* Scrollbar Styles */
 
-/* Hide main scrollbar for mobile and tablet */
+/* Sleek mobile scrollbar */
 @media (max-width: 768px) {
     #main-content::-webkit-scrollbar {
-        display: none;
+        width: 6px;
+        height: 6px;
     }
+    
+    #main-content::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    #main-content::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.15);
+        border-radius: 3px;
+        transition: background-color 0.2s ease;
+    }
+    
+    #main-content::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(255, 255, 255, 0.25);
+    }
+    
+    #main-content::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+    
+    /* Fallback for browsers that don't support webkit scrollbar */
     #main-content {
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
     }
 }
 
@@ -149,16 +194,87 @@ html, body {
     background: transparent;
 }
 .content-body {
+    /* Responsive width that scales with viewport and font size */
+    width: min(48rem, 90vw);
     max-width: 48rem;
-    margin: 0 auto;
     /* Add a small top gap inside the content body so the very first element
        isn't visually tucked under the fixed top toolbar. */
-    padding-top: 1rem;
+    padding: 1rem 1.5rem;
+    font-size: clamp(1rem, 1.2rem, 1.5rem);
+    /* Ensure content doesn't overflow horizontally on mobile */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    /* Smooth transitions for font size and layout changes */
+    transition: width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+                padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+                font-size 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+    /* Ensure proper centering */
+    justify-self: center;
+    box-sizing: border-box;
 }
 a { color: var(--link-color); }
 a:visited { color: var(--link-visited); }
 hr.chapter-separator { margin: 3em 0; border: none; border-top: 1px solid var(--separator-color); }
 img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
+
+/* Ensure all content elements don't overflow horizontally */
+.content-body * {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Prevent long words from breaking layout */
+.content-body p, .content-body div, .content-body span {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Responsive font size adjustments - simplified approach */
+@media (max-width: 768px) {
+    .content-body {
+        width: min(48rem, 90vw);
+        padding: 1rem 1rem;
+    }
+    
+    /* Progressive width reduction for larger fonts */
+    .content-body.text-lg { width: min(42rem, 88vw); }
+    .content-body.text-xl { width: min(38rem, 86vw); }
+    .content-body.text-2xl { width: min(34rem, 84vw); }
+    .content-body.text-3xl { width: min(30rem, 82vw); }
+    .content-body.text-4xl { width: min(26rem, 80vw); }
+    .content-body.text-5xl { width: min(22rem, 78vw); }
+}
+
+@media (max-width: 480px) {
+    .content-body {
+        width: min(48rem, 88vw);
+        padding: 1rem 0.75rem;
+    }
+    
+    /* More aggressive width reduction for mobile */
+    .content-body.text-lg { width: min(38rem, 86vw); }
+    .content-body.text-xl { width: min(34rem, 84vw); }
+    .content-body.text-2xl { width: min(30rem, 82vw); }
+    .content-body.text-3xl { width: min(26rem, 80vw); }
+    .content-body.text-4xl { width: min(22rem, 78vw); }
+    .content-body.text-5xl { width: min(18rem, 76vw); }
+}
+
+@media (max-width: 360px) {
+    .content-body {
+        width: min(48rem, 85vw);
+        padding: 1rem 0.5rem;
+    }
+    
+    /* Maximum constraint for very small screens */
+    .content-body.text-lg { width: min(34rem, 84vw); }
+    .content-body.text-xl { width: min(30rem, 82vw); }
+    .content-body.text-2xl { width: min(26rem, 80vw); }
+    .content-body.text-3xl { width: min(22rem, 78vw); }
+    .content-body.text-4xl { width: min(18rem, 76vw); }
+    .content-body.text-5xl { width: min(16rem, 74vw); }
+}
 
 @media (min-width: 1200px) {
     /*
@@ -171,6 +287,10 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
         max-width: clamp(48rem, 63vw, 72rem);
         margin: 0 auto;
     }
+    /* Update the content max variable to reflect the larger desktop sizing
+       so any responsive calculations (like when the sidebar opens) use the
+       correct target width. */
+    :root { --content-max: clamp(48rem, 63vw, 72rem); }
     /* Add extra left/right padding on desktop for breathing room */
     #main-content {
         padding-left: 4rem;
@@ -216,7 +336,7 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
     display: flex; justify-content: space-between; align-items: center; height: 48px;
     padding: 0 10px; background: var(--topbar-bg); backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--sidebar-border); flex-shrink: 0;
-    transition: opacity 0.22s ease, visibility 0.22s ease, transform 0.22s ease;
+    transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), visibility 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
     will-change: opacity, transform;
     transform: translateZ(0);
     z-index: 1100; /* sit above the sidebar (1000) but below control buttons if needed */
@@ -258,26 +378,6 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
     visibility: hidden;
     pointer-events: none;
 }
-/* Fullscreen specific styles */
-:fullscreen .top-toolbar {
-    display: none !important;
-}
-:-webkit-full-screen .top-toolbar {
-    display: none !important;
-}
-:-moz-full-screen .top-toolbar {
-    display: none !important;
-}
-/* Adjust main content padding when top bar is hidden */
-:fullscreen #main-content {
-    padding-top: 0;
-}
-:-webkit-full-screen #main-content {
-    padding-top: 0;
-}
-:-moz-full-screen #main-content {
-    padding-top: 0;
-}
 .top-toolbar div { display: flex; align-items: center; }
 .top-toolbar button {
     margin: 0 2px; padding: 10px; border: none; background: none; border-radius: 6px;
@@ -287,15 +387,16 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
 .top-toolbar button:hover { background: var(--topbar-button-hover); }
 .top-toolbar svg { width: 22px; height: 22px; }
 /* Responsive Typography */
-.text-xs { font-size: 0.75rem; }
-.text-sm { font-size: 0.875rem; }
-.text-base { font-size: 1rem; }
-.text-lg { font-size: 1.125rem; }
-.text-xl { font-size: 1.25rem; }
-.text-2xl { font-size: 1.5rem; }
-.text-3xl { font-size: 1.875rem; }
-.text-4xl { font-size: 2.25rem; }
-.text-5xl { font-size: 3rem; }
+.text-xs { font-size: clamp(0.6rem, 0.75rem, 0.9rem); }
+.text-sm { font-size: clamp(0.7rem, 0.875rem, 1.05rem); }
+.text-base { font-size: clamp(0.8rem, 1rem, 1.2rem); }
+.text-lg { font-size: clamp(0.9rem, 1.125rem, 1.35rem); }
+.text-xl { font-size: clamp(1rem, 1.25rem, 1.5rem); }
+.text-2xl { font-size: clamp(1.2rem, 1.5rem, 1.8rem); }
+.text-3xl { font-size: clamp(1.5rem, 1.875rem, 2.25rem); }
+.text-4xl { font-size: clamp(1.8rem, 2.25rem, 2.7rem); }
+.text-5xl { font-size: clamp(2.4rem, 3rem, 3.6rem); }
+
 
 /* Responsive base font size */
 @media (min-width: 768px) {
@@ -312,6 +413,18 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
        the open sidebar (plus the left:12px offset defined earlier). */
     #app-container.sidebar-open .top-toolbar .top-left-controls {
         transform: translateX(var(--sidebar-width));
+    }
+
+    /* Prevent the main reading content from being cropped when the sidebar
+       opens by constraining the content width to the remaining viewport
+       space (viewport width minus sidebar). We keep some horizontal
+       breathing room (4rem) so the layout doesn't feel tight. */
+    #app-container.sidebar-open .content-body {
+        /* Only shrink the content when the available viewport width is
+           smaller than the nominal content width. Use min() so we pick the
+           smaller of the two — the content will only shrink when necessary. */
+        max-width: min(var(--content-max), calc(100vw - var(--sidebar-width) - 4rem));
+        transition: max-width 220ms cubic-bezier(.2,.9,.2,1);
     }
 }
 @media (min-width: 769px) and (max-width: 1200px) {
