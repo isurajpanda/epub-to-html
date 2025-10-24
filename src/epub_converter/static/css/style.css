@@ -7,7 +7,8 @@
     --sidebar-hover-bg: #333;
     --link-color: #00ffff;
     --link-visited: #00cccc;
-    --topbar-bg: rgba(26, 26, 26, 0.8);
+    /* opaque topbar so content underneath isn't visible through it */
+    --topbar-bg: #1a1a1a;
     --topbar-button-hover: #444;
     --separator-color: #444;
     --sidebar-width: 320px;
@@ -34,8 +35,8 @@ html, body {
     left: 0; /* occupy layout slot but moved off-screen with transform */
     width: var(--sidebar-width);
     height: 100%;
-    /* Raise the sidebar above the top toolbar so the TOC visually overlays it */
-    z-index: 1300;
+    /* Ensure the sidebar/TOC overlays the top toolbar */
+    z-index: 1400;
     /* Use transform for smoother, GPU-accelerated animation */
     transform: translateX(-100%);
     transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
@@ -78,6 +79,9 @@ html, body {
     /* Allow the main content to be transformed when the sidebar opens. */
     transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
     will-change: transform;
+    /* Ensure in-page jumps and anchor scrolling account for the fixed toolbar
+       so the top of content isn't hidden beneath it. Add a small extra gap. */
+    scroll-padding-top: calc(var(--topbar-height) + 10px);
 }
 
 .toc-view {
@@ -147,6 +151,9 @@ html, body {
 .content-body {
     max-width: 48rem;
     margin: 0 auto;
+    /* Add a small top gap inside the content body so the very first element
+       isn't visually tucked under the fixed top toolbar. */
+    padding-top: 1rem;
 }
 a { color: var(--link-color); }
 a:visited { color: var(--link-visited); }
