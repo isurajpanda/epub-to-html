@@ -41,6 +41,7 @@ function buildTocList(items, onTocClick) {
     return ul;
 }
 function createTopBar({ onSidebar, onPrev, onNext, onFontSize, onDownload, onFullscreen, onViewMode } = {}) {
+    console.log("createTopBar called");
     const bar = document.createElement('div'); bar.className = 'top-toolbar';
     const left = document.createElement('div');
     left.appendChild(makeIconButton('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/></svg>', 'Show sidebar', onSidebar));
@@ -54,6 +55,9 @@ function createTopBar({ onSidebar, onPrev, onNext, onFontSize, onDownload, onFul
     return bar;
 }
 function makeIconButton(icon, label, onClick) {
+    if (label === 'Toggle font size') {
+        console.log("makeIconButton for font size button");
+    }
     const btn = document.createElement('button');
     btn.type = 'button'; btn.title = label; btn.setAttribute('aria-label', label);
     btn.innerHTML = icon; btn.onclick = onClick || null;
@@ -63,7 +67,11 @@ function makeIconButton(icon, label, onClick) {
 
 // --- START: Application Logic ---
 document.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM content loaded");
+
     const APP_DATA = JSON.parse(document.getElementById('app-data').textContent);
+    console.log("APP_DATA:", APP_DATA);
+
     const contentIdMapping = APP_DATA.content_id_mapping || {};
 
     const appContainer = document.getElementById('app-container');
@@ -127,12 +135,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const FONT_SIZES = ['tiny', 'small', 'normal', 'big', 'extra-big'];
-    let currentFontIndex = 2; // Start with 'normal'
+    const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
+    let currentFontIndex = 2; // Start with 'text-base'
     const toggleFontSize = () => {
-        document.body.classList.remove(`font-size-${FONT_SIZES[currentFontIndex]}`);
+        console.log("toggleFontSize called");
+        const contentBody = document.querySelector('.content-body');
+        console.log("contentBody:", contentBody);
+        if (!contentBody) return;
+
+        const oldClass = FONT_SIZES[currentFontIndex];
+        contentBody.classList.remove(oldClass);
         currentFontIndex = (currentFontIndex + 1) % FONT_SIZES.length;
-        document.body.classList.add(`font-size-${FONT_SIZES[currentFontIndex]}`);
+        const newClass = FONT_SIZES[currentFontIndex];
+        contentBody.classList.add(newClass);
+        console.log(`Removed class: ${oldClass}, Added class: ${newClass}`);
     };
 
     const toggleFullscreen = () => {
@@ -408,6 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Scrollspy for URL Hash ---
     const scrollTargets = Array.from(document.querySelectorAll('div.chapter[id], h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'));
     let scrollTimeout;
+    
     function updateHash() {
       const buffer = window.innerHeight * 0.3;
       let closestTarget = null;
@@ -422,10 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         history.replaceState(null, '', '#' + closestTarget.id);
       }
     }
-    mainContent.addEventListener('scroll', () => {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(updateHash, 150);
-    }, {passive: true});
+
     updateHash();
 });
 // --- END: Application Logic ---

@@ -56,6 +56,72 @@ html, body {
     overflow-y: auto;
     flex-grow: 1;
     padding: 1rem;
+    box-sizing: border-box;
+}
+
+.toc-view {
+    overflow-y: auto;
+}
+
+/* Scrollbar Styles */
+
+/* Hide main scrollbar for mobile and tablet */
+@media (max-width: 768px) {
+    #main-content::-webkit-scrollbar {
+        display: none;
+    }
+    #main-content {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+}
+
+/* Style scrollbar for desktop */
+@media (min-width: 769px) {
+    #main-content::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    #main-content::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    #main-content::-webkit-scrollbar-thumb {
+        background-color: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+    }
+
+    #main-content::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(255, 255, 255, 0.4);
+    }
+
+    #main-content::-webkit-scrollbar-corner {
+        background: transparent;
+    }
+}
+
+/* TOC Scrollbar Styles (visible on all screen sizes) */
+.toc-view::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.toc-view::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.toc-view::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.toc-view::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+}
+
+.toc-view::-webkit-scrollbar-corner {
+    background: transparent;
 }
 .content-body {
     max-width: 48rem;
@@ -141,3 +207,22 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
 .text-3xl { font-size: 1.875rem; }
 .text-4xl { font-size: 2.25rem; }
 .text-5xl { font-size: 3rem; }
+
+/* Responsive base font size */
+@media (max-width: 768px) {
+    html {
+        font-size: 14px;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+    html {
+        font-size: 16px;
+    }
+}
+
+@media (min-width: 1201px) {
+    html {
+        font-size: 18px;
+    }
+}
