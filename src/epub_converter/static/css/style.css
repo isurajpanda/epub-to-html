@@ -10,6 +10,8 @@
     --topbar-bg: rgba(26, 26, 26, 0.8);
     --topbar-button-hover: #444;
     --separator-color: #444;
+    --sidebar-width: 320px;
+    --topbar-height: 48px;
 }
 html, body {
     margin: 0;
@@ -29,11 +31,15 @@ html, body {
 #sidebar-container {
     position: fixed;
     top: 0;
-    left: -350px; /* Hidden by default */
-    width: 320px;
+    left: 0; /* occupy layout slot but moved off-screen with transform */
+    width: var(--sidebar-width);
     height: 100%;
-    z-index: 1000;
-    transition: left 0.3s ease-in-out;
+    /* Raise the sidebar above the top toolbar so the TOC visually overlays it */
+    z-index: 1300;
+    /* Use transform for smoother, GPU-accelerated animation */
+    transform: translateX(-100%);
+    transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
+    will-change: transform;
     box-shadow: 5px 0 15px rgba(0,0,0,0.5);
 }
 #content-wrapper {
@@ -41,15 +47,24 @@ html, body {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    transition: margin-left 0.3s ease-in-out;
+    /* Keep content-wrapper free of transforms so fixed-position children
+       (like the top toolbar/right-controls) remain fixed to the viewport.
+       Transforms will be applied to #main-content instead. */
+}
+/* Make room for the fixed top toolbar so content isn't hidden underneath */
+#content-wrapper {
+    padding-top: var(--topbar-height);
 }
 #app-container.sidebar-open #sidebar-container {
-    left: 0;
+    transform: translateX(0);
 }
 
+/* On desktop, shift the main reading area when the sidebar opens. We apply
+   transforms to #main-content (not #content-wrapper) to avoid creating a
+   containing block that would break position:fixed children. */
 @media (min-width: 768px) {
-    #app-container.sidebar-open #content-wrapper {
-        margin-left: 320px;
+    #app-container.sidebar-open #main-content {
+        transform: translateX(calc(var(--sidebar-width) * 0.5));
     }
 }
 #main-content {
@@ -57,6 +72,12 @@ html, body {
     flex-grow: 1;
     padding: 1rem;
     box-sizing: border-box;
+    -webkit-overflow-scrolling: touch; /* smooth touch scrolling on iOS */
+    touch-action: pan-y;
+    will-change: scroll-position, transform;
+    /* Allow the main content to be transformed when the sidebar opens. */
+    transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
+    will-change: transform;
 }
 
 .toc-view {
@@ -133,8 +154,28 @@ hr.chapter-separator { margin: 3em 0; border: none; border-top: 1px solid var(--
 img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
 
 @media (min-width: 1200px) {
+    /*
+      Make desktop content match an approximate "63% zoom" feel by using
+      a viewport-relative width (63vw) while constraining it with sensible
+      minimum and maximum values to avoid too-narrow or too-wide lines.
+      clamp(min, preferred, max) ensures the content remains readable.
+    */
     .content-body {
-        max-width: 64rem;
+        max-width: clamp(48rem, 63vw, 72rem);
+        margin: 0 auto;
+    }
+    /* Add extra left/right padding on desktop for breathing room */
+    #main-content {
+        padding-left: 4rem;
+        padding-right: 4rem;
+    }
+}
+
+@media (min-width: 1600px) {
+    /* For ultra-wide screens, increase side padding while clamp still caps width */
+    #main-content {
+        padding-left: 6rem;
+        padding-right: 6rem;
     }
 }
 /* UI Components from toc_and_topbar.js */
@@ -159,10 +200,51 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
 .toc-view a:hover { background: var(--sidebar-hover-bg); }
 .toc-view ul ul { padding-left: 1rem; }
 .top-toolbar {
+    /* Fixed toolbar so its right-side controls remain visible while the
+       content-wrapper and main content can be translated underneath. */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     display: flex; justify-content: space-between; align-items: center; height: 48px;
     padding: 0 10px; background: var(--topbar-bg); backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--sidebar-border); flex-shrink: 0;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
+    transition: opacity 0.22s ease, visibility 0.22s ease, transform 0.22s ease;
+    will-change: opacity, transform;
+    transform: translateZ(0);
+    z-index: 1100; /* sit above the sidebar (1000) but below control buttons if needed */
+}
+/* The toolbar is fixed to the top and also acts as a positioned container
+    for its absolutely-positioned inner controls. */
+/* .top-toolbar remains position: fixed (declared above) so we do not
+    re-declare position here which would break the fixed behavior. */
+
+/* Keep the left controls visually fixed in the viewport so they don't move
+   when the TOC opens. The right controls remain inside the toolbar and will
+   slide together with the content-wrapper. */
+.top-toolbar .top-left-controls {
+    /* Left controls are absolutely positioned inside the fixed toolbar.
+       When the sidebar opens we translate them to the right so they visually
+       move with the content even though the toolbar itself is fixed. */
+    position: absolute;
+    left: 12px;
+    top: calc((var(--topbar-height, 48px) - 40px) / 2);
+    display: flex;
+    gap: 6px;
+    z-index: 1101; /* above the sidebar */
+    transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
+    transform: translateX(0);
+}
+
+.top-toolbar .top-right-controls {
+    /* Pin right controls to the viewport so they never slide off-screen when
+       the TOC opens. Keep them above other UI with a higher z-index. */
+    position: fixed;
+    right: 12px;
+    top: calc((var(--topbar-height, 48px) - 40px) / 2);
+    display: flex;
+    gap: 6px;
+    z-index: 1200;
 }
 .top-toolbar.fullscreen-hidden {
     opacity: 0;
@@ -209,12 +291,22 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
 .text-5xl { font-size: 3rem; }
 
 /* Responsive base font size */
-@media (max-width: 768px) {
-    html {
-        font-size: 14px;
+@media (min-width: 768px) {
+    /* Restore the previous content behavior: translate the content by half
+       the sidebar width so the central reading area stays roughly centered.
+       We'll additionally nudge the left controls so they end up fully
+       visible (they'll move the remaining half-width). */
+    #app-container.sidebar-open #main-content {
+        transform: translateX(calc(var(--sidebar-width) * 0.5));
+    }
+
+    /* Position the left toolbar controls so they start where the TOC ends.
+       Move them by the full sidebar width so they align to the right edge of
+       the open sidebar (plus the left:12px offset defined earlier). */
+    #app-container.sidebar-open .top-toolbar .top-left-controls {
+        transform: translateX(var(--sidebar-width));
     }
 }
-
 @media (min-width: 769px) and (max-width: 1200px) {
     html {
         font-size: 16px;
