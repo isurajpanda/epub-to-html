@@ -114,25 +114,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const topbarContainer = document.getElementById('topbar-container');
     const mainContent = document.getElementById('main-content');
 
-    // Dynamic viewport height for mobile browsers
-    const setViewportHeight = () => {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
-    };
-    
-    // Set initial viewport height and listen for changes
-    setViewportHeight();
-    window.addEventListener('resize', setViewportHeight);
-    window.addEventListener('orientationchange', () => {
-        setTimeout(setViewportHeight, 100);
-    });
-
     // Utility function for instant navigation without scrolling
     const scrollToElement = (element, smooth = false) => {
         if (!element) return;
         
-        const topbarHeight = topbarContainer.offsetHeight;
-        const scrollPosition = Math.max(0, element.offsetTop - topbarHeight);
+        // Use CSS scroll-padding-top instead of manual calculation
+        // The CSS already handles the topbar offset with scroll-padding-top
+        const scrollPosition = Math.max(0, element.offsetTop);
         
         // Instant scroll without animation
         mainContent.scrollTo(0, scrollPosition);
@@ -171,20 +159,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 targetChapter = chapters[chapters.length - 1];
             }
         } else { // 'prev'
-            // Find the previous chapter that is not currently visible
+            // Find the previous chapter by looking for the last chapter that starts before the current scroll position
             for(let i = chapters.length - 1; i >= 0; i--) {
                 const chapter = chapters[i];
                 const chapterTop = chapter.offsetTop;
+                const chapterBottom = chapterTop + chapter.offsetHeight;
                 const visibleTop = currentScroll;
                 
-                // If this chapter is above the current viewport, navigate to it
-                if (chapterTop < visibleTop) {
+                // If this chapter is completely above the current viewport, it's a valid previous chapter
+                if (chapterBottom < visibleTop) {
                     targetChapter = chapter;
                     break;
                 }
             }
             
-            // If no chapter found above viewport, go to the first chapter
+            // If no previous chapter found, go to the first chapter
             if (!targetChapter) {
                 targetChapter = chapters[0];
             }
@@ -243,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 startFullscreenPoll();
                 // safety: ensure final state sync after short delays (mobile browsers
                 // can be flaky with fullscreenchange events)
-                setTimeout(handleFullscreenChange, 250);
+                setTimeout(handleFullscreenChange, 300);
                 setTimeout(handleFullscreenChange, 1000);
             } catch (e) {
                 // Failed to enter fullscreen
@@ -266,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (wasTocOpenBeforeFullscreen) {
                     appContainer.classList.add('sidebar-open');
                 }
-                setTimeout(handleFullscreenChange, 250);
+                setTimeout(handleFullscreenChange, 300);
                 setTimeout(handleFullscreenChange, 1000);
             } catch (e) {
                 // Failed to exit fullscreen
@@ -452,9 +441,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (scrollTargets.length > 0) {
         let activeHashId = null;
+        let isProgrammaticScroll = false; // Guard flag
 
         if ('IntersectionObserver' in window) {
             const io = new IntersectionObserver((entries) => {
+                // Don't update hash during programmatic scrolling
+                if (isProgrammaticScroll) return;
+                
                 // Pick the entry with the largest intersectionRatio that's intersecting
                 let candidates = entries.filter(e => e.isIntersecting && e.target.id);
                 if (candidates.length === 0) return;
@@ -471,14 +464,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             scrollTargets.forEach(t => io.observe(t));
-
-            // Prime the hash to the first visible target quickly
-            for (const t of scrollTargets) {
-                const rect = t.getBoundingClientRect();
-                if (rect.top < window.innerHeight * 0.3) { activeHashId = t.id; break; }
-            }
-            if (activeHashId) history.replaceState(null, '', '#' + activeHashId);
         }
+
+        // Override scrollToElement to set the guard flag
+        const originalScrollToElement = scrollToElement;
+        scrollToElement = (element, smooth = false) => {
+            isProgrammaticScroll = true;
+            originalScrollToElement(element, smooth);
+            // Reset flag after a short delay to allow for scroll completion
+            setTimeout(() => { isProgrammaticScroll = false; }, 100);
+        };
     }
 
     // --- Image lazy-loading improvements ---
@@ -505,11 +500,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const initializeScrollPosition = () => {
         if (window.location.hash) {
             const targetElement = document.querySelector(window.location.hash);
-            scrollToElement(targetElement);
-        } else {
-            // Ensure we start at the top consistently
-            mainContent.scrollTo(0, 0);
+            if (targetElement) {
+                scrollToElement(targetElement);
+            }
+            // If hash element not found, don't force scroll position
         }
+        // If no hash, don't force scroll position - let browser handle natural position
     };
 
     // Initialize scroll position

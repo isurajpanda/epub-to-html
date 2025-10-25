@@ -15,6 +15,9 @@
     --topbar-height: 48px;
     /* The nominal maximum content width; updated in larger breakpoints. */
     --content-max: 48rem;
+    /* Unified transition timing */
+    --transition-duration: 0.3s;
+    --transition-easing: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 html, body {
     margin: 0;
@@ -37,8 +40,8 @@ html, body {
     left: 0; /* occupy layout slot but moved off-screen with transform */
     width: var(--sidebar-width);
     height: 100%;
-    /* Ensure the sidebar/TOC overlays the top toolbar */
-    z-index: 1400;
+    /* Sidebar should be above toolbar but below right controls */
+    z-index: 1200;
     /* Use transform for smoother, GPU-accelerated animation */
     transform: translateX(calc(-100% - 2px)); /* Extra buffer to ensure complete hiding */
     transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
@@ -51,23 +54,18 @@ html, body {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
-    height: calc(var(--vh, 1vh) * 100 - var(--topbar-height));
     /* Content wrapper naturally starts below the fixed top bar */
     margin-top: var(--topbar-height);
     /* Keep content-wrapper free of transforms so fixed-position children
        (like the top toolbar/right-controls) remain fixed to the viewport.
        Transforms will be applied to #main-content instead. */
+    transition: margin-top var(--transition-duration) var(--transition-easing);
 }
 
 /* When in fullscreen mode we hide the top toolbar and remove the margin */
 .is-fullscreen #content-wrapper {
     margin-top: 0;
-    height: calc(var(--vh, 1vh) * 100);
-}
-
-/* Smooth transition when toggling fullscreen */
-#content-wrapper {
-    transition: margin-top 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    height: 100vh;
 }
 #app-container.sidebar-open #sidebar-container {
     transform: translateX(0);
@@ -93,7 +91,7 @@ html, body {
     /* Allow the main content to be transformed when the sidebar opens */
     transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
     /* Ensure anchor scrolling accounts for the fixed toolbar */
-    scroll-padding-top: 10px;
+    scroll-padding-top: var(--topbar-height);
     /* Use CSS Grid for perfect centering */
     display: grid;
     grid-template-columns: 1fr;
@@ -229,7 +227,55 @@ html, body {
 a { color: var(--link-color); }
 a:visited { color: var(--link-visited); }
 hr.chapter-separator { margin: 3em 0; border: none; border-top: 1px solid var(--separator-color); }
-img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
+img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
+
+/* Responsive padding adjustments for different screen sizes */
+@media (max-width: 480px) {
+    #main-content {
+        padding: 0.5rem;
+    }
+    
+    /* Adjust top bar positioning on mobile to prevent image cropping */
+    .top-toolbar {
+        top: 25px;
+    }
+    
+    .top-toolbar .top-left-controls {
+        top: 29px; /* 25px + 4px offset */
+    }
+    
+    .top-toolbar .top-right-controls {
+        top: 29px; /* 25px + 4px offset */
+    }
+    
+    /* Adjust content wrapper margin to account for lower top bar */
+    #content-wrapper {
+        margin-top: var(--topbar-height);
+    }
+    
+    /* Remove the extra padding from first image since top bar is now positioned correctly */
+    .content-body img.cover:first-of-type {
+        padding-top: 0;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+    #main-content {
+        padding: 0.75rem;
+    }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+    #main-content {
+        padding: 1rem;
+    }
+}
+
+@media (min-width: 1025px) {
+    #main-content {
+        padding: 1.5rem;
+    }
+}
 
 /* Ensure all content elements don't overflow horizontally */
 .content-body * {
@@ -330,50 +376,47 @@ img { max-width: 100%; height: auto; display: block; margin: 1em auto; }
     top: 0;
     left: 0;
     right: 0;
-    display: flex; justify-content: space-between; align-items: center; height: 48px;
+    display: flex; justify-content: space-between; align-items: center; height: var(--topbar-height);
     padding: 0 10px; background: var(--topbar-bg); backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--sidebar-border); flex-shrink: 0;
-    transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), visibility 0.4s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition: opacity var(--transition-duration) var(--transition-easing), 
+                visibility var(--transition-duration) var(--transition-easing), 
+                transform var(--transition-duration) var(--transition-easing);
     will-change: opacity, transform;
     transform: translateZ(0);
-    z-index: 1100; /* sit above the sidebar (1000) but below control buttons if needed */
+    z-index: 1100; /* Base toolbar layer */
 }
 /* The toolbar is fixed to the top and also acts as a positioned container
     for its absolutely-positioned inner controls. */
 /* .top-toolbar remains position: fixed (declared above) so we do not
     re-declare position here which would break the fixed behavior. */
 
-/* Keep the left controls visually fixed in the viewport so they don't move
-   when the TOC opens. The right controls remain inside the toolbar and will
-   slide together with the content-wrapper. */
+/* Simplified positioning - both control groups are fixed to viewport */
 .top-toolbar .top-left-controls {
-    /* Left controls are absolutely positioned inside the fixed toolbar.
-       When the sidebar opens we translate them to the right so they visually
-       move with the content even though the toolbar itself is fixed. */
-    position: absolute;
+    position: fixed;
     left: 12px;
-    top: calc((var(--topbar-height, 48px) - 40px) / 2);
+    top: 4px; /* Static positioning: (48px - 40px) / 2 = 4px */
     display: flex;
     gap: 6px;
-    z-index: 1101; /* above the sidebar */
+    z-index: 1300; /* Above sidebar, below right controls */
     transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
     transform: translateX(0);
 }
 
 .top-toolbar .top-right-controls {
-    /* Pin right controls to the viewport so they never slide off-screen when
-       the TOC opens. Keep them above other UI with a higher z-index. */
     position: fixed;
     right: 12px;
-    top: calc((var(--topbar-height, 48px) - 40px) / 2);
+    top: 4px; /* Static positioning: (48px - 40px) / 2 = 4px */
     display: flex;
     gap: 6px;
-    z-index: 1200;
+    z-index: 1400; /* Highest z-index to stay above sidebar */
 }
 .top-toolbar.fullscreen-hidden {
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
+    transition: opacity var(--transition-duration) var(--transition-easing), 
+                visibility var(--transition-duration) var(--transition-easing);
 }
 .top-toolbar div { display: flex; align-items: center; }
 .top-toolbar button {
