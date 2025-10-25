@@ -19,36 +19,6 @@ function truncateText(text, maxLength = 50) {
     return truncated.trim() + '...';
 }
 
-function createTocPanel({ coverUrl, title, author, tocItems = [], onTocClick } = {}) {
-    const sideBar = document.createElement('div');
-    sideBar.className = 'toc-sidebar';
-    const header = document.createElement('div');
-    header.className = 'toc-sidebar-header';
-    if (coverUrl) {
-        const cover = document.createElement('img');
-        cover.src = coverUrl; cover.alt = 'Book cover'; header.appendChild(cover);
-    }
-    const info = document.createElement('div');
-    if (title) { 
-        const h1 = document.createElement('h1'); 
-        h1.textContent = truncateText(title, 60); // Truncate title to 60 characters
-        h1.title = title; // Add full title as tooltip
-        info.appendChild(h1); 
-    }
-    if (author) { 
-        const p = document.createElement('p'); 
-        p.textContent = truncateText(author, 40); // Truncate author to 40 characters
-        p.title = author; // Add full author as tooltip
-        info.appendChild(p); 
-    }
-    header.appendChild(info); sideBar.appendChild(header);
-
-    const tocView = document.createElement('div');
-    tocView.className = 'toc-view';
-    tocView.appendChild(buildTocList(tocItems, onTocClick));
-    sideBar.appendChild(tocView);
-    return sideBar;
-}
 function buildTocList(items, onTocClick) {
     const ul = document.createElement('ul');
     for (const item of items) {
@@ -74,33 +44,139 @@ function buildTocList(items, onTocClick) {
     }
     return ul;
 }
-function createTopBar({ onSidebar, onPrev, onNext, onFontSize, onDownload, onFullscreen, onViewMode } = {}) {
-    const bar = document.createElement('div'); bar.className = 'top-toolbar';
-    const left = document.createElement('div');
-    left.className = 'top-left-controls';
-    left.appendChild(makeIconButton('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/></svg>', 'Show sidebar', onSidebar));
-    left.appendChild(makeIconButton('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-left-short" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5"/></svg>', 'Previous Chapter', onPrev));
-    left.appendChild(makeIconButton('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-right-short" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8"/></svg>', 'Next Chapter', onNext));
-    bar.appendChild(left);
-    const right = document.createElement('div');
-    right.className = 'top-right-controls';
-    right.appendChild(makeIconButton('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" fill="currentColor"><path d="M12.19 8.84a1.45 1.45 0 0 0-1.4-1h-.12a1.46 1.46 0 0 0-1.42 1L1.14 26.56a1.29 1.29 0 0 0-.14.59 1 1 0 0 0 1 1 1.12 1.12 0 0 0 1.08-.77l2.08-4.65h11l2.08 4.59a1.24 1.24 0 0 0 1.12.83 1.08 1.08 0 0 0 1.08-1.08 1.64 1.64 0 0 0-.14-.57ZM6.08 20.71l4.59-10.22 4.6 10.22Z"/><path d="M32.24 14.78A6.35 6.35 0 0 0 27.6 13.2a11.36 11.36 0 0 0-4.7 1 1 1 0 0 0-.58.89 1 1 0 0 0 .94.92 1.23 1.23 0 0 0 .39-.08 8.87 8.87 0 0 1 3.72-.81c2.7 0 4.28 1.33 4.28 3.92v.5a15.29 15.29 0 0 0-4.42-.61c-3.64 0-6.14 1.61-6.14 4.64v.05c0 2.95 2.7 4.48 5.37 4.48a6.29 6.29 0 0 0 5.19-2.48v1.01a1 1 0 0 0 1 1 1 1 0 0 0 1-1.06V19a5.71 5.71 0 0 0-1.41-4.22Zm-.56 7.7c0 2.28-2.17 3.89-4.81 3.89-1.94 0-3.61-1.06-3.61-2.86v-.06c0-1.8 1.5-3 4.2-3a15.2 15.2 0 0 1 4.22.61Z"/></svg>', 'Toggle font size', onFontSize));
-    right.appendChild(makeIconButton('<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-fullscreen" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg>', 'Toggle fullscreen', onFullscreen));
-    bar.appendChild(right);
-    return bar;
-}
-function makeIconButton(icon, label, onClick) {
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.title = label; btn.setAttribute('aria-label', label);
-    btn.innerHTML = icon; btn.onclick = onClick || null;
-    return btn;
-}
 // --- END: Embedded toc_and_topbar.js logic ---
 
 // --- START: Application Logic ---
+
+// Define handlers that work immediately
+const toggleSidebar = () => {
+    const appContainer = document.getElementById('app-container');
+    if (appContainer) {
+        appContainer.classList.toggle('sidebar-open');
+    }
+};
+
+const navigateChapter = (direction) => {
+    const chapters = Array.from(document.querySelectorAll('.chapter'));
+    if (chapters.length === 0) {
+        console.log('Chapters not loaded yet');
+        return;
+    }
+    
+    const mainContent = document.getElementById('main-content');
+    const topbarContainer = document.getElementById('topbar-container');
+    if (!mainContent || !topbarContainer) return;
+    
+    const currentScroll = mainContent.scrollTop;
+    const topbarHeight = topbarContainer.offsetHeight;
+    const viewportHeight = mainContent.clientHeight;
+    let targetChapter = null;
+
+    if (direction === 'next') {
+        // Find the next chapter that is not currently visible
+        for(const chapter of chapters) {
+            const chapterTop = chapter.offsetTop;
+            const chapterBottom = chapterTop + chapter.offsetHeight;
+            const visibleTop = currentScroll + topbarHeight;
+            const visibleBottom = currentScroll + viewportHeight;
+            
+            // If chapter is below the visible area, it's our target
+            if (chapterTop > visibleBottom) {
+                targetChapter = chapter;
+                break;
+            }
+        }
+    } else if (direction === 'prev') {
+        // Find the previous chapter
+        for(let i = chapters.length - 1; i >= 0; i--) {
+            const chapter = chapters[i];
+            const chapterTop = chapter.offsetTop;
+            const visibleTop = currentScroll + topbarHeight;
+            
+            // If chapter is above the visible area, it's our target
+            if (chapterTop < visibleTop) {
+                targetChapter = chapter;
+                break;
+            }
+        }
+    }
+
+    if (targetChapter) {
+        const scrollPosition = Math.max(0, targetChapter.offsetTop - topbarHeight);
+        mainContent.scrollTo(0, scrollPosition);
+    }
+};
+
+const toggleFontSize = () => {
+    const mainContent = document.getElementById('main-content');
+    if (!mainContent) return;
+    
+    const currentSize = mainContent.style.fontSize || '';
+    const sizes = ['', '0.875rem', '1rem', '1.125rem', '1.25rem'];
+    const currentIndex = sizes.indexOf(currentSize);
+    const nextIndex = (currentIndex + 1) % sizes.length;
+    mainContent.style.fontSize = sizes[nextIndex];
+};
+
+const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.log('Error attempting to enable fullscreen:', err);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+};
+
+// Add event delegation for immediate button functionality
+document.addEventListener('click', (event) => {
+    const target = event.target.closest('button');
+    if (!target) return;
+    
+    switch(target.id) {
+        case 'sidebar-toggle':
+            event.preventDefault();
+            // Only allow toggle if not in loading state
+            if (!target.classList.contains('button-loading')) {
+                toggleSidebar();
+            }
+            break;
+        case 'prev-chapter':
+            event.preventDefault();
+            navigateChapter('prev');
+            break;
+        case 'next-chapter':
+            event.preventDefault();
+            navigateChapter('next');
+            break;
+        case 'font-size-toggle':
+            event.preventDefault();
+            toggleFontSize();
+            break;
+        case 'fullscreen-toggle':
+            event.preventDefault();
+            toggleFullscreen();
+            break;
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
 
     const APP_DATA = JSON.parse(document.getElementById('app-data').textContent);
+    
+    // Remove loading state from TOC button
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.classList.remove('button-loading');
+        sidebarToggle.classList.remove('loading-spinner');
+        sidebarToggle.title = 'Show sidebar';
+        sidebarToggle.setAttribute('aria-label', 'Show sidebar');
+        // Remove loading spinner class from SVG
+        const svg = sidebarToggle.querySelector('svg');
+        if (svg) {
+            svg.classList.remove('loading-spinner');
+        }
+    }
 
     // No redirect - / stays as /
     let isRedirected = false;
@@ -129,7 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentIdMapping = APP_DATA.content_id_mapping || {};
     
     // --- Handlers ---
-    const toggleSidebar = () => appContainer.classList.toggle('sidebar-open');
     
     const navigateChapter = (direction) => {
         const chapters = Array.from(document.querySelectorAll('.chapter'));
@@ -184,18 +259,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const FONT_SIZES = ['text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
-    let currentFontIndex = 2; // Start with 'text-base'
-    const toggleFontSize = () => {
-        const contentBody = document.querySelector('.content-body');
-        if (!contentBody) return;
-
-        const oldClass = FONT_SIZES[currentFontIndex];
-        contentBody.classList.remove(oldClass);
-        currentFontIndex = (currentFontIndex + 1) % FONT_SIZES.length;
-        const newClass = FONT_SIZES[currentFontIndex];
-        contentBody.classList.add(newClass);
-    };
 
     const toggleFullscreen = () => {
         const topbarContainer = document.getElementById('topbar-container');
@@ -411,23 +474,37 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', handleKeyDown, { passive: false });
     
     // --- UI Initialization ---
-    const tocPanel = createTocPanel({
-        coverUrl: APP_DATA.cover_image_url,
-        title: APP_DATA.title,
-        author: APP_DATA.author,
-        tocItems: APP_DATA.toc,
-        onTocClick: handleTocClick
-    });
-    sidebarContainer.appendChild(tocPanel);
+    // Populate TOC sidebar with data
+    const bookCover = document.getElementById('book-cover');
+    const bookTitle = document.getElementById('book-title');
+    const bookAuthor = document.getElementById('book-author');
+    const tocList = document.getElementById('toc-list');
 
-    const topBar = createTopBar({
-        onSidebar: toggleSidebar,
-        onPrev: () => navigateChapter('prev'),
-        onNext: () => navigateChapter('next'),
-        onFontSize: toggleFontSize,
-        onFullscreen: toggleFullscreen
-    });
-    topbarContainer.appendChild(topBar);
+    // Set book cover
+    if (APP_DATA.cover_image_url && bookCover) {
+        bookCover.src = APP_DATA.cover_image_url;
+        bookCover.style.display = 'block';
+    }
+
+    // Set book title
+    if (APP_DATA.title && bookTitle) {
+        bookTitle.textContent = truncateText(APP_DATA.title, 60);
+        bookTitle.title = APP_DATA.title; // Add full title as tooltip
+        bookTitle.style.display = 'block';
+    }
+
+    // Set book author
+    if (APP_DATA.author && bookAuthor) {
+        bookAuthor.textContent = truncateText(APP_DATA.author, 40);
+        bookAuthor.title = APP_DATA.author; // Add full author as tooltip
+        bookAuthor.style.display = 'block';
+    }
+
+    // Populate TOC list
+    if (APP_DATA.toc && tocList) {
+        tocList.appendChild(buildTocList(APP_DATA.toc, handleTocClick));
+    }
+
 
     // Close sidebar when clicking on main content area if open
     mainContent.addEventListener('click', () => {
@@ -476,25 +553,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    // --- Image lazy-loading improvements ---
-    function enableLazyLoadingImages() {
-        try {
-            const imgs = Array.from(mainContent.querySelectorAll('.content-body img'));
-            if (imgs.length === 0) return;
-            imgs.forEach(img => {
-                // Prefer native browser lazy-loading
-                try { img.decoding = 'async'; } catch (e) {}
-                try { img.setAttribute('fetchpriority', 'low'); } catch (e) {}
-                if ('loading' in HTMLImageElement.prototype) {
-                    try { img.loading = 'lazy'; } catch (e) {}
-                }
-            });
-        } catch (e) {
-            // noop
-        }
-    }
-
-    enableLazyLoadingImages();
 
     // Ensure consistent initial scroll position
     const initializeScrollPosition = () => {
@@ -513,5 +571,20 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Focus main content for immediate keyboard scrolling
     mainContent.focus();
+});
+
+// Fallback: Remove loading state when window is fully loaded
+window.addEventListener('load', () => {
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle && sidebarToggle.classList.contains('button-loading')) {
+        sidebarToggle.classList.remove('button-loading');
+        sidebarToggle.classList.remove('loading-spinner');
+        sidebarToggle.title = 'Show sidebar';
+        sidebarToggle.setAttribute('aria-label', 'Show sidebar');
+        const svg = sidebarToggle.querySelector('svg');
+        if (svg) {
+            svg.classList.remove('loading-spinner');
+        }
+    }
 });
 // --- END: Application Logic ---
