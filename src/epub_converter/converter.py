@@ -88,6 +88,93 @@ class EPUBConverter:
         body_content = re.sub(r'<!DOCTYPE[^>]*>', '', body_content)
         return body_content
 
+    def _map_toc_to_chapters(self, toc, content_id_mapping):
+        """Map TOC entries to correct chapter IDs based on content file mapping."""
+        def process_toc_item(item):
+            if 'href' in item:
+                original_href = item['href']
+                
+                # Extract file path from href (remove any existing fragments)
+                file_path = original_href.split('#')[0]
+                
+                # Try to find matching chapter ID
+                chapter_id = None
+                
+                # Try exact match first
+                if file_path in content_id_mapping:
+                    chapter_id = content_id_mapping[file_path]
+                else:
+                    # Try with just filename
+                    filename = Path(file_path).name
+                    if filename in content_id_mapping:
+                        chapter_id = content_id_mapping[filename]
+                    else:
+                        # Try with stem (filename without extension)
+                        stem = Path(file_path).stem
+                        if stem in content_id_mapping:
+                            chapter_id = content_id_mapping[stem]
+                
+                if chapter_id:
+                    # Update href to use the mapped chapter ID
+                    item['href'] = f"#{chapter_id}"
+                    print(f"    Mapped TOC: {item['label']} -> {item['href']}")
+                else:
+                    # Fallback: try to find closest match by filename similarity
+                    chapter_id = self._find_closest_chapter_match(file_path, content_id_mapping)
+                    if chapter_id:
+                        item['href'] = f"#{chapter_id}"
+                        print(f"    Fallback mapped TOC: {item['label']} -> {item['href']}")
+                    else:
+                        print(f"    Warning: Could not map TOC entry: {item['label']} ({original_href})")
+                        item['href'] = "#page01"  # Default to first page
+                
+                # Process children recursively
+                if 'children' in item:
+                    item['children'] = [process_toc_item(child) for child in item['children']]
+            
+            return item
+        
+        return [process_toc_item(item) for item in toc]
+
+    def _find_closest_chapter_match(self, file_path, content_id_mapping):
+        """Find the closest matching chapter for a file path."""
+        filename = Path(file_path).name.lower()
+        stem = Path(file_path).stem.lower()
+        
+        # Look for partial matches in the mapping keys
+        for key, chapter_id in content_id_mapping.items():
+            key_lower = key.lower()
+            if (filename in key_lower or 
+                stem in key_lower or 
+                key_lower in filename or 
+                key_lower in stem):
+                return chapter_id
+        
+        return None
+
+    def _minify_css(self, css_content):
+        """Minify CSS using rcssmin library."""
+        try:
+            import rcssmin
+            return rcssmin.cssmin(css_content)
+        except ImportError:
+            # Fallback to simple minification if rcssmin not available
+            css_content = re.sub(r'/\*.*?\*/', '', css_content, flags=re.DOTALL)
+            css_content = re.sub(r'\s+', ' ', css_content)
+            return css_content.strip()
+
+    def _minify_js(self, js_content):
+        """Minify JavaScript using rjsmin library."""
+        try:
+            import rjsmin
+            return rjsmin.jsmin(js_content)
+        except ImportError:
+            # Fallback to simple minification if rjsmin not available
+            js_content = re.sub(r'(?<!:)//.*?$', '', js_content, flags=re.MULTILINE)
+            js_content = re.sub(r'/\*.*?\*/', '', js_content, flags=re.DOTALL)
+            js_content = re.sub(r'\s+', ' ', js_content)
+            return js_content.strip()
+
     def fix_links_and_images(self, html_content, content_id_mapping):
         """Fix all internal anchor href paths."""
         
@@ -192,6 +279,16 @@ class EPUBConverter:
                 relative_path = unquote(content_file.relative_to(extract_dir).as_posix())
                 content_id_mapping[relative_path] = chapter_id
                 content_id_mapping[content_file.name] = chapter_id
+                # Also map common path variations
+                content_id_mapping[content_file.stem] = chapter_id
+                content_id_mapping[f"Text/{content_file.name}"] = chapter_id
+                content_id_mapping[f"OEBPS/{content_file.name}"] = chapter_id
+            
+            # Process TOC entries to map them to correct chapter IDs
+            if toc:
+                toc = self._map_toc_to_chapters(toc, content_id_mapping)
+                metadata['toc'] = toc
+            
             metadata['content_id_mapping'] = content_id_mapping
 
             custom_css = None
@@ -209,8 +306,37 @@ class EPUBConverter:
             with open(output_html, 'w', encoding='utf-8') as f:
                 f.write(final_html)
 
+            # Copy static files directly to static folder (flatten structure)
             static_folder = Path(__file__).parent / "static"
-            shutil.copytree(static_folder, epub_output_folder / "static", dirs_exist_ok=True)
+            output_static_folder = epub_output_folder / "static"
+            
+            # Remove existing static folder to clean up old structure
+            if output_static_folder.exists():
+                shutil.rmtree(output_static_folder)
+            
+            output_static_folder.mkdir(exist_ok=True)
+            
+            # Copy and minify CSS file
+            css_source = static_folder / "css" / "style.css"
+            css_dest = output_static_folder / "style.css"
+            if css_source.exists():
+                with open(css_source, 'r', encoding='utf-8') as f:
+                    css_content = f.read()
+                minified_css = self._minify_css(css_content)
+                with open(css_dest, 'w', encoding='utf-8') as f:
+                    f.write(minified_css)
+                print(f"  Minified CSS: {len(css_content)} -> {len(minified_css)} characters")
+            
+            # Copy and minify JS file
+            js_source = static_folder / "js" / "script.js"
+            js_dest = output_static_folder / "script.js"
+            if js_source.exists():
+                with open(js_source, 'r', encoding='utf-8') as f:
+                    js_content = f.read()
+                minified_js = self._minify_js(js_content)
+                with open(js_dest, 'w', encoding='utf-8') as f:
+                    f.write(minified_js)
+                print(f"  Minified JS: {len(js_content)} -> {len(minified_js)} characters")
 
             print(f"  Created: {output_html.resolve()}")
 

@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./static/css/style.css">
+    <link rel="stylesheet" href="./static/style.css">
     {% if custom_css %}
     <style>
         {{ custom_css }}
@@ -19,7 +16,7 @@
         <aside id="sidebar-container"></aside>
         <div id="content-wrapper">
             <header id="topbar-container"></header>
-            <main id="main-content">
+            <main id="main-content" tabindex="0">
                 <div class="content-body text-base">
                     {{ body_content }}
                 </div>
@@ -30,6 +27,6 @@
     <script id="app-data" type="application/json">
         {{ metadata_json }}
     </script>
-    <script src="./static/js/script.js"></script>
+    <script src="./static/script.js"></script>
 </body>
 </html>

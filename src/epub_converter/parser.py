@@ -99,7 +99,7 @@ class EPUBParser:
         return [(None, f) for f in sorted(all_content_files, key=natural_sort_key)]
 
     def find_and_parse_toc(self, opf_file, opf_root):
-        """Find and parse the ToC file (nav.xhtml or toc.ncx)."""
+        """Find and parse the ToC file (nav.xhtml or toc.ncx) with robust fallbacks."""
         if not opf_file:
             print("  Warning: No OPF file found, cannot extract ToC")
             return [], {}
@@ -160,55 +160,11 @@ class EPUBParser:
             else:
                 print("  No 'cover' meta tag found in OPF metadata.")
 
-            # --- Find and parse ToC ---
-            # Try EPUB3 nav document first
-            nav_item = manifest.find('.//opf:item[@properties="nav"]', self.ns)
-            if nav_item is not None:
-                nav_file = opf_dir / unquote(nav_item.get('href'))
-                print(f"  Parsing EPUB3 ToC: {nav_file.name}")
-                if nav_file.exists():
-                    toc = self.parse_nav_xhtml(nav_file, opf_dir)
-                    if toc:
-                        print(f"  Successfully parsed {len(toc)} ToC entries from EPUB3 nav")
-                        return toc, book_meta
-                    else:
-                        print(f"  Warning: EPUB3 nav file found but no ToC entries extracted")
-                else:
-                    print(f"  Warning: EPUB3 nav file not found: {nav_file}")
-
-            # Fallback to EPUB2 NCX file
-            spine = root.find(self._get_ns_tag('spine'))
-            if spine is not None:
-                ncx_id = spine.get('toc')
-                if ncx_id:
-                    ncx_item = manifest.find(f'.//opf:item[@id="{ncx_id}"]', self.ns)
-                    if ncx_item is not None:
-                        ncx_file = opf_dir / unquote(ncx_item.get('href'))
-                        print(f"  Parsing EPUB2 ToC: {ncx_file.name}")
-                        if ncx_file.exists():
-                            toc = self.parse_ncx_toc(ncx_file, opf_dir)
-                            if toc:
-                                print(f"  Successfully parsed {len(toc)} ToC entries from EPUB2 NCX")
-                                return toc, book_meta
-                            else:
-                                print(f"  Warning: EPUB2 NCX file found but no ToC entries extracted")
-                        else:
-                            print(f"  Warning: EPUB2 NCX file not found: {ncx_file}")
-            
-            # Final fallback: try to find any nav or toc files
-            print("  Trying fallback ToC detection...")
-            for root_dir, _, files in os.walk(opf_root):
-                for file in files:
-                    if file.lower() in ['nav.xhtml', 'toc.ncx', 'navigation.xhtml']:
-                        toc_file = Path(root_dir) / file
-                        print(f"  Found potential ToC file: {toc_file.name}")
-                        if file.endswith('.ncx'):
-                            toc = self.parse_ncx_toc(toc_file, opf_dir)
-                        else:
-                            toc = self.parse_nav_xhtml(toc_file, opf_dir)
-                        if toc:
-                            print(f"  Successfully parsed {len(toc)} ToC entries from fallback file")
-                            return toc, book_meta
+            # --- Enhanced ToC Detection with Multiple Strategies ---
+            toc = self._find_toc_robust(manifest, opf_dir, opf_root, root)
+            if toc:
+                print(f"  Successfully parsed {len(toc)} ToC entries")
+                return toc, book_meta
             
             print("  No ToC found, will generate basic chapter list")
             return [], book_meta
@@ -219,8 +175,185 @@ class EPUBParser:
             traceback.print_exc()
             return [], {}
 
+    def _find_toc_robust(self, manifest, opf_dir, opf_root, root):
+        """Robust ToC detection using multiple strategies."""
+        toc = []
+        
+        # Strategy 1: EPUB3 nav document with properties="nav"
+        nav_item = manifest.find('.//opf:item[@properties="nav"]', self.ns)
+        if nav_item is not None:
+            nav_file = opf_dir / unquote(nav_item.get('href'))
+            print(f"  Strategy 1: Parsing EPUB3 ToC: {nav_file.name}")
+            if nav_file.exists():
+                toc = self.parse_nav_xhtml(nav_file, opf_dir)
+                if toc:
+                    print(f"  Successfully parsed {len(toc)} ToC entries from EPUB3 nav")
+                    return toc
+                else:
+                    print(f"  Warning: EPUB3 nav file found but no ToC entries extracted")
+            else:
+                print(f"  Warning: EPUB3 nav file not found: {nav_file}")
+
+        # Strategy 2: EPUB2 NCX file from spine toc attribute
+        spine = root.find(self._get_ns_tag('spine'))
+        if spine is not None:
+            ncx_id = spine.get('toc')
+            if ncx_id:
+                ncx_item = manifest.find(f'.//opf:item[@id="{ncx_id}"]', self.ns)
+                if ncx_item is not None:
+                    ncx_file = opf_dir / unquote(ncx_item.get('href'))
+                    print(f"  Strategy 2: Parsing EPUB2 ToC: {ncx_file.name}")
+                    if ncx_file.exists():
+                        toc = self.parse_ncx_toc(ncx_file, opf_dir)
+                        if toc:
+                            print(f"  Successfully parsed {len(toc)} ToC entries from EPUB2 NCX")
+                            return toc
+                        else:
+                            print(f"  Warning: EPUB2 NCX file found but no ToC entries extracted")
+                    else:
+                        print(f"  Warning: EPUB2 NCX file not found: {ncx_file}")
+
+        # Strategy 3: Look for nav files by common names and patterns
+        print("  Strategy 3: Searching for nav files by name patterns...")
+        nav_files = self._find_nav_files_by_name(opf_root)
+        for nav_file in nav_files:
+            print(f"  Found potential nav file: {nav_file.name}")
+            if nav_file.suffix.lower() == '.ncx':
+                toc = self.parse_ncx_toc(nav_file, opf_dir)
+            else:
+                toc = self.parse_nav_xhtml(nav_file, opf_dir)
+            if toc:
+                print(f"  Successfully parsed {len(toc)} ToC entries from {nav_file.name}")
+                return toc
+
+        # Strategy 4: Look for any XHTML files that might contain navigation
+        print("  Strategy 4: Searching for navigation in XHTML files...")
+        toc = self._extract_toc_from_xhtml_files(opf_root, opf_dir)
+        if toc:
+            print(f"  Successfully extracted {len(toc)} ToC entries from XHTML files")
+            return toc
+
+        # Strategy 5: Try to extract TOC from manifest items with specific media types
+        print("  Strategy 5: Checking manifest for navigation items...")
+        toc = self._extract_toc_from_manifest_items(manifest, opf_dir)
+        if toc:
+            print(f"  Successfully extracted {len(toc)} ToC entries from manifest items")
+            return toc
+
+        return []
+
+    def _find_nav_files_by_name(self, opf_root):
+        """Find navigation files by common naming patterns."""
+        nav_files = []
+        nav_patterns = [
+            'nav.xhtml', 'navigation.xhtml', 'toc.xhtml', 'table-of-contents.xhtml',
+            'toc.ncx', 'navigation.ncx', 'table-of-contents.ncx',
+            'nav.html', 'toc.html', 'navigation.html'
+        ]
+        
+        for root_dir, _, files in os.walk(opf_root):
+            for file in files:
+                if file.lower() in nav_patterns:
+                    nav_files.append(Path(root_dir) / file)
+        
+        return nav_files
+
+    def _extract_toc_from_xhtml_files(self, opf_root, opf_dir):
+        """Extract TOC from any XHTML files that might contain navigation."""
+        for root_dir, _, files in os.walk(opf_root):
+            for file in files:
+                if file.lower().endswith(('.xhtml', '.html')):
+                    xhtml_file = Path(root_dir) / file
+                    # Skip files that are likely not navigation
+                    if any(skip in file.lower() for skip in ['cover', 'titlepage', 'copyright']):
+                        continue
+                    
+                    try:
+                        with open(xhtml_file, 'r', encoding='utf-8', errors='ignore') as f:
+                            content = f.read()
+                        
+                        # Look for navigation patterns in the content
+                        if any(pattern in content.lower() for pattern in [
+                            '<nav', 'table of contents', 'toc', 'navigation',
+                            'epub:type="toc"', 'id="toc"', 'class="toc"'
+                        ]):
+                            print(f"    Checking {xhtml_file.name} for navigation...")
+                            toc = self.parse_nav_xhtml(xhtml_file, opf_dir)
+                            if toc:
+                                return toc
+                    except Exception as e:
+                        print(f"    Warning: Could not read {xhtml_file.name}: {e}")
+                        continue
+        
+        return []
+
+    def _extract_toc_from_manifest_items(self, manifest, opf_dir):
+        """Extract TOC from manifest items that might be navigation files."""
+        if manifest is None:
+            return []
+        
+        for item in manifest.findall('.//opf:item', self.ns):
+            href = item.get('href')
+            media_type = item.get('media-type', '')
+            properties = item.get('properties', '')
+            
+            # Check if this looks like a navigation file
+            if (('nav' in properties.lower() or 
+                 'toc' in properties.lower() or
+                 'navigation' in media_type.lower() or
+                 'nav' in href.lower() or
+                 'toc' in href.lower()) and 
+                href and href.lower().endswith(('.xhtml', '.html', '.ncx'))):
+                
+                nav_file = opf_dir / unquote(href)
+                if nav_file.exists():
+                    print(f"    Found navigation item: {nav_file.name}")
+                    if nav_file.suffix.lower() == '.ncx':
+                        toc = self.parse_ncx_toc(nav_file, opf_dir)
+                    else:
+                        toc = self.parse_nav_xhtml(nav_file, opf_dir)
+                    if toc:
+                        return toc
+        
+        return []
+
+    def _clean_toc_href(self, href):
+        """Clean TOC href by removing problematic anchor fragments and normalizing paths."""
+        if not href:
+            return href
+        
+        # Split into file path and fragment
+        if '#' in href:
+            file_part, fragment = href.split('#', 1)
+        else:
+            file_part, fragment = href, ''
+        
+        # Clean up the file path
+        file_part = file_part.strip()
+        
+        # Remove common problematic anchor fragments that don't exist in combined HTML
+        problematic_fragments = [
+            'auto_bookmark_toc_top',
+            'toc_top', 
+            'bookmark_toc_top',
+            'auto_bookmark',
+            'bookmark',
+            'top'
+        ]
+        
+        # If fragment is problematic, remove it
+        if fragment and fragment.lower() in problematic_fragments:
+            print(f"    Removed problematic anchor fragment: #{fragment}")
+            return file_part
+        
+        # If fragment exists and is not problematic, keep it
+        if fragment:
+            return f"{file_part}#{fragment}"
+        
+        return file_part
+
     def parse_nav_xhtml(self, nav_file, base_dir):
-        """Parse a `nav.xhtml` file to extract ToC structure."""
+        """Parse a `nav.xhtml` file to extract ToC structure with enhanced robustness."""
         if not nav_file.exists(): 
             print(f"    Nav file does not exist: {nav_file}")
             return []
@@ -243,7 +376,10 @@ class EPUBParser:
                     if hasattr(self, 'temp_dir') and self.temp_dir:
                         full_href = full_href.replace(str(self.temp_dir.as_posix()) + '/', '')
                     
-                    item = {'label': label, 'href': unquote(full_href)}
+                    # Clean up the href by removing problematic anchor fragments
+                    cleaned_href = self._clean_toc_href(full_href)
+                    
+                    item = {'label': label, 'href': unquote(cleaned_href)}
                     print(f"    ToC entry: {label} -> {item['href']}")
                     
                     # Check for nested list
@@ -253,73 +389,169 @@ class EPUBParser:
                     toc.append(item)
             return toc
 
+        def parse_ol_no_ns(ol_element):
+            """Parse ol element without namespace assumptions."""
+            toc = []
+            for li in ol_element.findall('.//li'):
+                a = li.find('a')
+                if a is not None:
+                    href = a.get('href', '')
+                    label = ''.join(a.itertext()).strip()
+                    
+                    if not label:
+                        print(f"    Warning: Empty label found in nav link: {href}")
+                        continue
+                    
+                    # Resolve relative path
+                    full_href = urljoin(str(base_dir.as_posix()) + '/', href)
+                    # Remove temp directory prefix if present
+                    if hasattr(self, 'temp_dir') and self.temp_dir:
+                        full_href = full_href.replace(str(self.temp_dir.as_posix()) + '/', '')
+                    
+                    # Clean up the href by removing problematic anchor fragments
+                    cleaned_href = self._clean_toc_href(full_href)
+                    
+                    item = {'label': label, 'href': unquote(cleaned_href)}
+                    print(f"    ToC entry: {label} -> {item['href']}")
+                    
+                    # Check for nested list
+                    nested_ol = li.find('ol')
+                    if nested_ol is not None:
+                        item['children'] = parse_ol_no_ns(nested_ol)
+                    toc.append(item)
+            return toc
+
+        # Try multiple parsing strategies
+        strategies = [
+            self._parse_nav_with_namespaces,
+            self._parse_nav_without_namespaces,
+            self._parse_nav_regex_fallback
+        ]
+        
+        for strategy in strategies:
+            try:
+                toc = strategy(nav_file, base_dir, parse_ol, parse_ol_no_ns)
+                if toc:
+                    return toc
+            except Exception as e:
+                print(f"    Strategy failed: {e}")
+                continue
+        
+        print(f"    No navigation structure found in {nav_file.name}")
+        return []
+
+    def _parse_nav_with_namespaces(self, nav_file, base_dir, parse_ol, parse_ol_no_ns):
+        """Parse nav file using proper namespaces."""
+        tree = ET.parse(nav_file)
+        root = tree.getroot()
+        
+        # Try multiple approaches to find the TOC navigation
+        nav_element = None
+        
+        # Method 1: Look for nav with epub:type="toc"
+        nav_element = root.find('.//xhtml:nav[@epub:type="toc"]', self.ns)
+        if nav_element is not None:
+            print(f"    Found nav with epub:type='toc'")
+        
+        # Method 2: Look for nav with id="toc"
+        if nav_element is None:
+            nav_element = root.find('.//xhtml:nav[@id="toc"]', self.ns)
+            if nav_element is not None:
+                print(f"    Found nav with id='toc'")
+        
+        # Method 3: Look for any nav element
+        if nav_element is None:
+            nav_element = root.find('.//xhtml:nav', self.ns)
+            if nav_element is not None:
+                print(f"    Found generic nav element")
+        
+        # Method 4: Look for any ol element (fallback)
+        if nav_element is None:
+            ol_element = root.find('.//xhtml:ol', self.ns)
+            if ol_element is not None:
+                print(f"    Found ol element directly")
+                return parse_ol(ol_element)
+        
+        if nav_element is not None:
+            ol = nav_element.find('xhtml:ol', self.ns)
+            if ol is not None:
+                return parse_ol(ol)
+            else:
+                print(f"    Warning: No ol element found in nav")
+        
+        return []
+
+    def _parse_nav_without_namespaces(self, nav_file, base_dir, parse_ol, parse_ol_no_ns):
+        """Parse nav file without namespace assumptions."""
+        tree = ET.parse(nav_file)
+        root = tree.getroot()
+        
+        # Try various namespace-free approaches
+        nav_element = root.find('.//{http://www.w3.org/1999/xhtml}nav')
+        if nav_element is not None:
+            ol = nav_element.find('{http://www.w3.org/1999/xhtml}ol')
+            if ol is not None:
+                return parse_ol(ol)
+        
+        # Try finding any ol element
+        ol_element = root.find('.//{http://www.w3.org/1999/xhtml}ol')
+        if ol_element is not None:
+            return parse_ol(ol_element)
+        
+        # Try without any namespace prefixes
+        nav_element = root.find('.//nav')
+        if nav_element is not None:
+            ol = nav_element.find('ol')
+            if ol is not None:
+                return parse_ol_no_ns(ol)
+        
+        ol_element = root.find('.//ol')
+        if ol_element is not None:
+            return parse_ol_no_ns(ol_element)
+        
+        return []
+
+    def _parse_nav_regex_fallback(self, nav_file, base_dir, parse_ol, parse_ol_no_ns):
+        """Parse nav file using regex as a last resort."""
         try:
-            tree = ET.parse(nav_file)
-            root = tree.getroot()
+            with open(nav_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
             
-            # Try multiple approaches to find the TOC navigation
-            nav_element = None
+            # Look for navigation patterns using regex
+            import re
             
-            # Method 1: Look for nav with epub:type="toc"
-            nav_element = root.find('.//xhtml:nav[@epub:type="toc"]', self.ns)
-            if nav_element is not None:
-                print(f"    Found nav with epub:type='toc'")
+            # Find all links that might be TOC entries
+            link_pattern = r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>'
+            matches = re.findall(link_pattern, content, re.DOTALL | re.IGNORECASE)
             
-            # Method 2: Look for nav with id="toc"
-            if nav_element is None:
-                nav_element = root.find('.//xhtml:nav[@id="toc"]', self.ns)
-                if nav_element is not None:
-                    print(f"    Found nav with id='toc'")
+            toc = []
+            for href, label_html in matches:
+                # Clean up the label
+                label = re.sub(r'<[^>]+>', '', label_html).strip()
+                if not label:
+                    continue
+                
+                # Resolve relative path
+                full_href = urljoin(str(base_dir.as_posix()) + '/', href)
+                # Remove temp directory prefix if present
+                if hasattr(self, 'temp_dir') and self.temp_dir:
+                    full_href = full_href.replace(str(self.temp_dir.as_posix()) + '/', '')
+                
+                item = {'label': label, 'href': unquote(full_href)}
+                print(f"    ToC entry (regex): {label} -> {item['href']}")
+                toc.append(item)
             
-            # Method 3: Look for any nav element
-            if nav_element is None:
-                nav_element = root.find('.//xhtml:nav', self.ns)
-                if nav_element is not None:
-                    print(f"    Found generic nav element")
-            
-            # Method 4: Look for any ol element (fallback)
-            if nav_element is None:
-                ol_element = root.find('.//xhtml:ol', self.ns)
-                if ol_element is not None:
-                    print(f"    Found ol element directly")
-                    return parse_ol(ol_element)
-            
-            if nav_element is not None:
-                ol = nav_element.find('xhtml:ol', self.ns)
-                if ol is not None:
-                    return parse_ol(ol)
-                else:
-                    print(f"    Warning: No ol element found in nav")
-            
-            print(f"    No navigation structure found in {nav_file.name}")
-            return []
+            if toc:
+                print(f"    Found {len(toc)} TOC entries using regex fallback")
+                return toc
             
         except Exception as e:
-            print(f"    Error parsing nav.xhtml: {e}")
-            # Try without namespaces for broken files
-            try:
-                tree = ET.parse(nav_file)
-                root = tree.getroot()
-                
-                # Try various namespace-free approaches
-                nav_element = root.find('.//{http://www.w3.org/1999/xhtml}nav')
-                if nav_element is not None:
-                    ol = nav_element.find('{http://www.w3.org/1999/xhtml}ol')
-                    if ol is not None:
-                        return parse_ol(ol)
-                
-                # Try finding any ol element
-                ol_element = root.find('.//{http://www.w3.org/1999/xhtml}ol')
-                if ol_element is not None:
-                    return parse_ol(ol_element)
-                    
-            except Exception as e2:
-                print(f"    Failed fallback parsing: {e2}")
-            
-            return []
+            print(f"    Regex fallback failed: {e}")
+        
+        return []
 
     def parse_ncx_toc(self, ncx_file, base_dir):
-        """Parse a `toc.ncx` file to extract ToC structure."""
+        """Parse a `toc.ncx` file to extract ToC structure with enhanced robustness."""
         if not ncx_file.exists(): 
             print(f"    NCX file does not exist: {ncx_file}")
             return []
@@ -351,7 +583,10 @@ class EPUBParser:
                     if hasattr(self, 'temp_dir') and self.temp_dir:
                         full_src = full_src.replace(str(self.temp_dir.as_posix()) + '/', '')
                     
-                    item = {'label': label, 'href': unquote(full_src)}
+                    # Clean up the href by removing problematic anchor fragments
+                    cleaned_src = self._clean_toc_href(full_src)
+                    
+                    item = {'label': label, 'href': unquote(cleaned_src)}
                     print(f"    ToC entry: {label} -> {item['href']}")
                     
                     # Check for nested navPoints
@@ -366,20 +601,138 @@ class EPUBParser:
                     continue
             return items
 
-        try:
-            tree = ET.parse(ncx_file)
-            root = tree.getroot()
-            
-            navmap = root.find('ncx:navMap', self.ns)
-            if navmap is not None:
-                return parse_navpoint(navmap)
-            else:
-                print(f"    No navMap found in {ncx_file.name}")
-                return []
-                
-        except Exception as e:
-            print(f"    Error parsing NCX file: {e}")
+        def parse_navpoint_no_ns(navpoint):
+            """Parse navPoint without namespace assumptions."""
+            items = []
+            for point in navpoint.findall('.//navPoint'):
+                try:
+                    label_elem = point.find('.//text')
+                    if label_elem is None or not label_elem.text:
+                        print(f"    Warning: Empty or missing label in navPoint")
+                        continue
+                    
+                    label = label_elem.text.strip()
+                    
+                    content_elem = point.find('.//content')
+                    if content_elem is None:
+                        print(f"    Warning: No content element found for label: {label}")
+                        continue
+                    
+                    src = content_elem.get('src')
+                    if not src:
+                        print(f"    Warning: No src attribute found for label: {label}")
+                        continue
+                    
+                    # Resolve relative path
+                    full_src = urljoin(str(base_dir.as_posix()) + '/', src)
+                    # Remove temp directory prefix if present
+                    if hasattr(self, 'temp_dir') and self.temp_dir:
+                        full_src = full_src.replace(str(self.temp_dir.as_posix()) + '/', '')
+                    
+                    # Clean up the href by removing problematic anchor fragments
+                    cleaned_src = self._clean_toc_href(full_src)
+                    
+                    item = {'label': label, 'href': unquote(cleaned_src)}
+                    print(f"    ToC entry (no-ns): {label} -> {item['href']}")
+                    
+                    # Check for nested navPoints
+                    nested_points = point.findall('.//navPoint')
+                    if nested_points:
+                        item['children'] = parse_navpoint_no_ns(point)
+                    
+                    items.append(item)
+                    
+                except Exception as e:
+                    print(f"    Error parsing navPoint (no-ns): {e}")
+                    continue
+            return items
+
+        # Try multiple parsing strategies
+        strategies = [
+            self._parse_ncx_with_namespaces,
+            self._parse_ncx_without_namespaces,
+            self._parse_ncx_regex_fallback
+        ]
+        
+        for strategy in strategies:
+            try:
+                toc = strategy(ncx_file, base_dir, parse_navpoint, parse_navpoint_no_ns)
+                if toc:
+                    return toc
+            except Exception as e:
+                print(f"    NCX strategy failed: {e}")
+                continue
+        
+        print(f"    No navigation structure found in {ncx_file.name}")
+        return []
+
+    def _parse_ncx_with_namespaces(self, ncx_file, base_dir, parse_navpoint, parse_navpoint_no_ns):
+        """Parse NCX file using proper namespaces."""
+        tree = ET.parse(ncx_file)
+        root = tree.getroot()
+        
+        navmap = root.find('ncx:navMap', self.ns)
+        if navmap is not None:
+            return parse_navpoint(navmap)
+        else:
+            print(f"    No navMap found in {ncx_file.name}")
             return []
+
+    def _parse_ncx_without_namespaces(self, ncx_file, base_dir, parse_navpoint, parse_navpoint_no_ns):
+        """Parse NCX file without namespace assumptions."""
+        tree = ET.parse(ncx_file)
+        root = tree.getroot()
+        
+        # Try with explicit namespace URIs
+        navmap = root.find('.//{http://www.daisy.org/z3986/2005/ncx/}navMap')
+        if navmap is not None:
+            return parse_navpoint(navmap)
+        
+        # Try without any namespace prefixes
+        navmap = root.find('.//navMap')
+        if navmap is not None:
+            return parse_navpoint_no_ns(navmap)
+        
+        return []
+
+    def _parse_ncx_regex_fallback(self, ncx_file, base_dir, parse_navpoint, parse_navpoint_no_ns):
+        """Parse NCX file using regex as a last resort."""
+        try:
+            with open(ncx_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            
+            # Look for navigation patterns using regex
+            import re
+            
+            # Find all navPoint entries
+            navpoint_pattern = r'<navPoint[^>]*>.*?<navLabel>.*?<text>(.*?)</text>.*?</navLabel>.*?<content[^>]*src=["\']([^"\']+)["\'][^>]*>.*?</content>.*?</navPoint>'
+            matches = re.findall(navpoint_pattern, content, re.DOTALL | re.IGNORECASE)
+            
+            toc = []
+            for label, src in matches:
+                # Clean up the label
+                label = re.sub(r'<[^>]+>', '', label).strip()
+                if not label:
+                    continue
+                
+                # Resolve relative path
+                full_src = urljoin(str(base_dir.as_posix()) + '/', src)
+                # Remove temp directory prefix if present
+                if hasattr(self, 'temp_dir') and self.temp_dir:
+                    full_src = full_src.replace(str(self.temp_dir.as_posix()) + '/', '')
+                
+                item = {'label': label, 'href': unquote(full_src)}
+                print(f"    ToC entry (regex): {label} -> {item['href']}")
+                toc.append(item)
+            
+            if toc:
+                print(f"    Found {len(toc)} TOC entries using regex fallback")
+                return toc
+            
+        except Exception as e:
+            print(f"    NCX regex fallback failed: {e}")
+        
+        return []
 
     def generate_basic_toc(self, content_files, extract_dir):
         """Generate a basic TOC from chapter headings when no TOC is found."""
@@ -394,9 +747,16 @@ class EPUBParser:
                 # Try to find chapter title from headings
                 title = None
                 
-                # Look for h1, h2, h3 tags
+                # Look for h1, h2, h3 tags with various patterns
                 for tag in ['h1', 'h2', 'h3']:
+                    # Try with namespace
                     match = re.search(f'<{tag}[^>]*>(.*?)</{tag}>', content, re.DOTALL | re.IGNORECASE)
+                    if match:
+                        title = re.sub(r'<[^>]+>', '', match.group(1)).strip()
+                        break
+                    
+                    # Try with xhtml namespace
+                    match = re.search(f'<xhtml:{tag}[^>]*>(.*?)</xhtml:{tag}>', content, re.DOTALL | re.IGNORECASE)
                     if match:
                         title = re.sub(r'<[^>]+>', '', match.group(1)).strip()
                         break
@@ -407,9 +767,34 @@ class EPUBParser:
                     if title_match:
                         title = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()
                 
+                # Try to find any text that might be a chapter title
+                if not title:
+                    # Look for common chapter patterns
+                    chapter_patterns = [
+                        r'Chapter\s+\d+[:\s]*(.*?)(?:\n|$)',
+                        r'Chapter\s+[IVX]+[:\s]*(.*?)(?:\n|$)',
+                        r'Part\s+\d+[:\s]*(.*?)(?:\n|$)',
+                        r'Section\s+\d+[:\s]*(.*?)(?:\n|$)',
+                        r'^\s*(\d+\.?\s+.*?)(?:\n|$)',
+                        r'^\s*([IVX]+\.?\s+.*?)(?:\n|$)'
+                    ]
+                    
+                    for pattern in chapter_patterns:
+                        match = re.search(pattern, content, re.MULTILINE | re.IGNORECASE)
+                        if match:
+                            title = match.group(1).strip()
+                            title = re.sub(r'<[^>]+>', '', title).strip()
+                            if title and len(title) > 3:  # Avoid very short matches
+                                break
+                
                 # If still no title, use filename
                 if not title:
                     title = content_file_path.stem
+                    # Clean up filename-based title
+                    title = re.sub(r'[_-]', ' ', title)
+                    title = re.sub(r'\d+', '', title).strip()
+                    if not title:
+                        title = f"Chapter {i}"
                 
                 # Clean up title
                 title = re.sub(r'\s+', ' ', title).strip()

@@ -1,5 +1,24 @@
 // --- START: Embedded toc_and_topbar.js logic ---
 // (The 'export' keyword has been removed to work in a single script tag)
+
+function truncateText(text, maxLength = 50) {
+    if (!text || text.length <= maxLength) {
+        return text;
+    }
+    
+    // Try to cut at a word boundary if possible
+    const truncated = text.substring(0, maxLength);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    
+    // If we can find a good word boundary and it's not too short, use it
+    if (lastSpaceIndex > maxLength * 0.7) {
+        return truncated.substring(0, lastSpaceIndex).trim() + '...';
+    }
+    
+    // Otherwise, just cut at the character limit
+    return truncated.trim() + '...';
+}
+
 function createTocPanel({ coverUrl, title, author, tocItems = [], onTocClick } = {}) {
     const sideBar = document.createElement('div');
     sideBar.className = 'toc-sidebar';
@@ -10,8 +29,18 @@ function createTocPanel({ coverUrl, title, author, tocItems = [], onTocClick } =
         cover.src = coverUrl; cover.alt = 'Book cover'; header.appendChild(cover);
     }
     const info = document.createElement('div');
-    if (title) { const h1 = document.createElement('h1'); h1.textContent = title; info.appendChild(h1); }
-    if (author) { const p = document.createElement('p'); p.textContent = author; info.appendChild(p); }
+    if (title) { 
+        const h1 = document.createElement('h1'); 
+        h1.textContent = truncateText(title, 60); // Truncate title to 60 characters
+        h1.title = title; // Add full title as tooltip
+        info.appendChild(h1); 
+    }
+    if (author) { 
+        const p = document.createElement('p'); 
+        p.textContent = truncateText(author, 40); // Truncate author to 40 characters
+        p.title = author; // Add full author as tooltip
+        info.appendChild(p); 
+    }
     header.appendChild(info); sideBar.appendChild(header);
 
     const tocView = document.createElement('div');
@@ -26,12 +55,17 @@ function buildTocList(items, onTocClick) {
         const li = document.createElement('li');
         if (item.href) {
             const a = document.createElement('a');
-            a.textContent = item.label; a.href = '#';
+            a.textContent = truncateText(item.label, 45); // Truncate TOC labels to 45 characters
+            a.title = item.label; // Add full label as tooltip
+            a.href = '#';
             a.onclick = e => { e.preventDefault(); if (onTocClick) onTocClick(item); };
             li.appendChild(a);
         } else {
             const span = document.createElement('span');
-            span.textContent = item.label; span.style.color = 'GrayText'; li.appendChild(span);
+            span.textContent = truncateText(item.label, 45); // Truncate TOC labels to 45 characters
+            span.title = item.label; // Add full label as tooltip
+            span.style.color = 'GrayText'; 
+            li.appendChild(span);
         }
         if (item.children && item.children.length) {
             li.appendChild(buildTocList(item.children, onTocClick));
@@ -65,13 +99,14 @@ function makeIconButton(icon, label, onClick) {
 
 // --- START: Application Logic ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOM content loaded");
 
     const APP_DATA = JSON.parse(document.getElementById('app-data').textContent);
-    console.log("APP_DATA:", APP_DATA);
 
     // No redirect - / stays as /
     let isRedirected = false;
+    
+    // Track TOC panel state for fullscreen transitions
+    let wasTocOpenBeforeFullscreen = false;
 
     // Get DOM elements first
     const appContainer = document.getElementById('app-container');
@@ -171,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentFontIndex = (currentFontIndex + 1) % FONT_SIZES.length;
         const newClass = FONT_SIZES[currentFontIndex];
         contentBody.classList.add(newClass);
-        console.log(`Removed class: ${oldClass}, Added class: ${newClass}`);
     };
 
     const toggleFullscreen = () => {
@@ -187,6 +221,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const enter = async () => {
             try {
+                // Close TOC panel if open before entering fullscreen
+                if (appContainer.classList.contains('sidebar-open')) {
+                    wasTocOpenBeforeFullscreen = true;
+                    appContainer.classList.remove('sidebar-open');
+                } else {
+                    wasTocOpenBeforeFullscreen = false;
+                }
+                
                 const el = document.documentElement;
                 if (el.requestFullscreen) await el.requestFullscreen();
                 else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
@@ -204,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(handleFullscreenChange, 250);
                 setTimeout(handleFullscreenChange, 1000);
             } catch (e) {
-                console.warn('Failed to enter fullscreen', e);
+                // Failed to enter fullscreen
             }
         };
 
@@ -220,10 +262,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (topToolbar) topToolbar.classList.remove('fullscreen-hidden');
                 // stop polling if we were polling
                 stopFullscreenPoll();
+                // Restore TOC panel state if it was open before fullscreen
+                if (wasTocOpenBeforeFullscreen) {
+                    appContainer.classList.add('sidebar-open');
+                }
                 setTimeout(handleFullscreenChange, 250);
                 setTimeout(handleFullscreenChange, 1000);
             } catch (e) {
-                console.warn('Failed to exit fullscreen', e);
+                // Failed to exit fullscreen
             }
         };
 
@@ -300,24 +346,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const handleTocClick = (item) => {
         if (!item.href) return;
-        const [filePart, fragment] = item.href.split('#');
         
-        let targetElement = null;
-        if (fragment) {
-            targetElement = document.getElementById(fragment);
+        // Extract page ID from href (should now be in format "#page01", "#page02", etc.)
+        let pageId = item.href;
+        
+        // Remove leading # if present
+        if (pageId.startsWith('#')) {
+            pageId = pageId.substring(1);
         }
         
-        if (!targetElement && filePart) {
-            const fileName = filePart.split('/').pop();
-            const chapterId = contentIdMapping[item.href] || contentIdMapping[filePart] || contentIdMapping[fileName];
-            if (chapterId) {
-                targetElement = document.getElementById(chapterId);
+        // Look for target element with the page ID
+        let targetElement = document.getElementById(pageId);
+        
+        // If not found, try to find the closest chapter
+        if (!targetElement) {
+            // Try to find any chapter element that might be close
+            const chapterElements = document.querySelectorAll('.chapter');
+            if (chapterElements.length > 0) {
+                // Use the first chapter as fallback
+                targetElement = chapterElements[0];
+                pageId = targetElement.id;
             }
         }
 
         if (targetElement) {
+            // Update URL hash to show current page
+            history.replaceState(null, '', '#' + pageId);
             scrollToElement(targetElement, false);
+        } else {
+            // Could not find target element
         }
+        
         if (window.innerWidth < 768) {
             toggleSidebar();
         }
@@ -332,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const key = (event.key || '').toLowerCase();
 
-        // Prevent default for our handled keys
+        // Prevent default for our handled keys (except scrolling keys)
         if (['a','d','arrowleft','arrowright','f','t'].includes(key)) {
             event.preventDefault();
         }
@@ -344,6 +403,12 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'd': case 'arrowright':
                 navigateChapter('next');
                 break;
+            case 'arrowup': case 'w':
+                // Allow default scrolling behavior
+                return;
+            case 'arrowdown': case 's':
+                // Allow default scrolling behavior
+                return;
             case 'f':
                 toggleFullscreen();
                 break;
@@ -382,8 +447,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Scrollspy for URL Hash - DISABLED ---
-    // All scrollspy functionality disabled to prevent any scroll interference
+    // --- Scrollspy for URL Hash (Minimal) ---
+    const scrollTargets = Array.from(mainContent.querySelectorAll('div.chapter[id], h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'));
+
+    if (scrollTargets.length > 0) {
+        let activeHashId = null;
+
+        if ('IntersectionObserver' in window) {
+            const io = new IntersectionObserver((entries) => {
+                // Pick the entry with the largest intersectionRatio that's intersecting
+                let candidates = entries.filter(e => e.isIntersecting && e.target.id);
+                if (candidates.length === 0) return;
+                candidates.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+                const best = candidates[0].target.id;
+                if (best && best !== activeHashId) {
+                    activeHashId = best;
+                    history.replaceState(null, '', '#' + best);
+                }
+            }, {
+                root: mainContent,
+                rootMargin: '0px 0px -60% 0px',
+                threshold: [0, 0.25, 0.5, 0.75, 1]
+            });
+
+            scrollTargets.forEach(t => io.observe(t));
+
+            // Prime the hash to the first visible target quickly
+            for (const t of scrollTargets) {
+                const rect = t.getBoundingClientRect();
+                if (rect.top < window.innerHeight * 0.3) { activeHashId = t.id; break; }
+            }
+            if (activeHashId) history.replaceState(null, '', '#' + activeHashId);
+        }
+    }
 
     // --- Image lazy-loading improvements ---
     function enableLazyLoadingImages() {
@@ -418,5 +514,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize scroll position
     initializeScrollPosition();
+    
+    // Focus main content for immediate keyboard scrolling
+    mainContent.focus();
 });
 // --- END: Application Logic ---
