@@ -2,3 +2,9 @@ jinja2
 rjsmin
 rcssmin
 numpy
+lxml
+orjson
+pillow-simd
+pyvips
+selectolax
+zipfile-deflate64

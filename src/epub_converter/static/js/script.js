@@ -93,6 +93,31 @@ const toggleFullscreen = () => {
     }
 };
 
+const downloadEpub = () => {
+    // Get the EPUB filename from the app data
+    const appDataElement = document.getElementById('app-data');
+    if (!appDataElement) return;
+    
+    const appData = JSON.parse(appDataElement.textContent);
+    const epubFilename = appData.epub_filename;
+    
+    if (!epubFilename) {
+        console.log('No EPUB filename found in metadata');
+        return;
+    }
+    
+    // Create download link pointing to the EPUB file in the parent directory
+    const downloadLink = document.createElement('a');
+    downloadLink.href = '../' + epubFilename;
+    downloadLink.download = epubFilename;
+    downloadLink.style.display = 'none';
+    
+    // Add to DOM, trigger download, then remove
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+};
+
 const navigateChapter = (direction) => {
     const chapters = Array.from(document.querySelectorAll('.chapter'));
     if (chapters.length === 0) return;
@@ -225,6 +250,10 @@ document.addEventListener('click', (event) => {
         case 'font-size-toggle':
             event.preventDefault();
             toggleFontSize();
+            break;
+        case 'download-epub':
+            event.preventDefault();
+            downloadEpub();
             break;
         case 'fullscreen-toggle':
             event.preventDefault();
