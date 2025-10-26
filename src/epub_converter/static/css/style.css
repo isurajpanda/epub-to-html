@@ -26,7 +26,6 @@ html, body {
     color: var(--text-color);
     font-family: serif;
     line-height: 1.6;
-    scroll-behavior: smooth;
 }
 #app-container {
     display: flex;
@@ -250,7 +249,12 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
     
     /* Adjust content wrapper margin to account for lower top bar */
     #content-wrapper {
-        margin-top: var(--topbar-height);
+        margin-top: 48px;
+    }
+    
+    /* Adjust scroll padding to match the lower top bar position */
+    #main-content {
+        scroll-padding-top: 50px;
     }
     
     /* Remove the extra padding from first image since top bar is now positioned correctly */

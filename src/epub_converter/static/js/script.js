@@ -321,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Utility function for instant navigation without scrolling
-    const scrollToElement = (element, smooth = false) => {
+    let scrollToElement = (element, smooth = false) => {
         if (!element) return;
         
         // Use CSS scroll-padding-top instead of manual calculation
@@ -598,62 +598,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Scrollspy for URL Hash (Minimal) ---
     const scrollTargets = Array.from(mainContent.querySelectorAll('div.chapter[id], h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]'));
+    let activeHashId = null;
+    let isProgrammaticScroll = false; // Guard flag
+    let isInitialLoad = true; // Flag to prevent unwanted scrolling on first load
 
-    if (scrollTargets.length > 0) {
-        let activeHashId = null;
-        let isProgrammaticScroll = false; // Guard flag
+    // Disable scroll override - no automatic scrolling behavior
+    // scrollToElement remains as the original function without any overrides
 
-        if ('IntersectionObserver' in window) {
-            const io = new IntersectionObserver((entries) => {
-                // Don't update hash during programmatic scrolling
-                if (isProgrammaticScroll) return;
-                
-                // Pick the entry with the largest intersectionRatio that's intersecting
-                let candidates = entries.filter(e => e.isIntersecting && e.target.id);
-                if (candidates.length === 0) return;
-                candidates.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-                const best = candidates[0].target.id;
-                if (best && best !== activeHashId) {
-                    activeHashId = best;
-                    history.replaceState(null, '', '#' + best);
-                }
-            }, {
-                root: mainContent,
-                rootMargin: '0px 0px -60% 0px',
-                threshold: [0, 0.25, 0.5, 0.75, 1]
-            });
-
-            scrollTargets.forEach(t => io.observe(t));
-        }
-
-        // Override scrollToElement to set the guard flag
-        const originalScrollToElement = scrollToElement;
-        scrollToElement = (element, smooth = false) => {
-            isProgrammaticScroll = true;
-            originalScrollToElement(element, smooth);
-            // Reset flag after a short delay to allow for scroll completion
-            setTimeout(() => { isProgrammaticScroll = false; }, 100);
-        };
-    }
+    // Disable automatic hash updates - no auto-scrolling behavior
+    // The intersection observer is disabled to prevent automatic scrolling
 
 
-    // Ensure consistent initial scroll position
-    const initializeScrollPosition = () => {
-        if (window.location.hash) {
-            const targetElement = document.querySelector(window.location.hash);
-            if (targetElement) {
-                scrollToElement(targetElement);
-            }
-            // If hash element not found, don't force scroll position
-        }
-        // If no hash, don't force scroll position - let browser handle natural position
-    };
-
-    // Initialize scroll position
-    initializeScrollPosition();
-    
-    // Focus main content for immediate keyboard scrolling
-    mainContent.focus();
+    // Completely disable all scroll initialization - let browser handle everything naturally
+    // No scroll manipulation at all
 });
 
 // Fallback: Remove loading state when window is fully loaded
