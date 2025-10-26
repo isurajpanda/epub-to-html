@@ -1,3 +1,4 @@
 jinja2
 rjsmin
 rcssmin
+numpy

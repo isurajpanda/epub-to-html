@@ -51,17 +51,51 @@ function buildTocList(items, onTocClick) {
 // Define handlers that work immediately
 const toggleSidebar = () => {
     const appContainer = document.getElementById('app-container');
+    const tocOverlay = document.getElementById('toc-overlay');
+    
     if (appContainer) {
-        appContainer.classList.toggle('sidebar-open');
+        const isOpen = appContainer.classList.toggle('sidebar-open');
+        
+        // Toggle overlay shield (mobile only)
+        if (tocOverlay && window.innerWidth < 768) {
+            if (isOpen) {
+                tocOverlay.classList.add('active');
+            } else {
+                tocOverlay.classList.remove('active');
+            }
+        }
+    }
+};
+
+
+const toggleFontSize = () => {
+    const contentBody = document.querySelector('.content-body');
+    if (!contentBody) return;
+    
+    const sizeClasses = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
+    const currentClass = sizeClasses.find(cls => contentBody.classList.contains(cls)) || 'text-base';
+    const currentIndex = sizeClasses.indexOf(currentClass);
+    const nextIndex = (currentIndex + 1) % sizeClasses.length;
+    
+    // Remove all size classes
+    sizeClasses.forEach(cls => contentBody.classList.remove(cls));
+    // Add the new size class
+    contentBody.classList.add(sizeClasses[nextIndex]);
+};
+
+const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.log('Error attempting to enable fullscreen:', err);
+        });
+    } else {
+        document.exitFullscreen();
     }
 };
 
 const navigateChapter = (direction) => {
     const chapters = Array.from(document.querySelectorAll('.chapter'));
-    if (chapters.length === 0) {
-        console.log('Chapters not loaded yet');
-        return;
-    }
+    if (chapters.length === 0) return;
     
     const mainContent = document.getElementById('main-content');
     const topbarContainer = document.getElementById('topbar-container');
@@ -77,55 +111,94 @@ const navigateChapter = (direction) => {
         for(const chapter of chapters) {
             const chapterTop = chapter.offsetTop;
             const chapterBottom = chapterTop + chapter.offsetHeight;
-            const visibleTop = currentScroll + topbarHeight;
             const visibleBottom = currentScroll + viewportHeight;
             
-            // If chapter is below the visible area, it's our target
-            if (chapterTop > visibleBottom) {
+            // If this chapter is below the current viewport, navigate to it
+            if (chapterTop >= visibleBottom) {
                 targetChapter = chapter;
                 break;
             }
         }
-    } else if (direction === 'prev') {
-        // Find the previous chapter
+        
+        // If no chapter found below viewport, go to the last chapter
+        if (!targetChapter) {
+            targetChapter = chapters[chapters.length - 1];
+        }
+    } else { // 'prev'
+        // Find the previous chapter by looking for the last chapter that starts before the current scroll position
         for(let i = chapters.length - 1; i >= 0; i--) {
             const chapter = chapters[i];
             const chapterTop = chapter.offsetTop;
-            const visibleTop = currentScroll + topbarHeight;
+            const chapterBottom = chapterTop + chapter.offsetHeight;
+            const visibleTop = currentScroll;
             
-            // If chapter is above the visible area, it's our target
-            if (chapterTop < visibleTop) {
+            // If this chapter starts before the current viewport, it's a valid previous chapter
+            // Use a small buffer (50px) to make navigation more forgiving
+            if (chapterTop < visibleTop - 50) {
                 targetChapter = chapter;
                 break;
             }
         }
+        
+        // If no previous chapter found, go to the first chapter
+        if (!targetChapter) {
+            targetChapter = chapters[0];
+        }
     }
-
+    
     if (targetChapter) {
-        const scrollPosition = Math.max(0, targetChapter.offsetTop - topbarHeight);
+        // Use CSS scroll-padding-top instead of manual calculation
+        const scrollPosition = Math.max(0, targetChapter.offsetTop);
         mainContent.scrollTo(0, scrollPosition);
     }
 };
 
-const toggleFontSize = () => {
-    const mainContent = document.getElementById('main-content');
-    if (!mainContent) return;
+// Image Modal Functionality (Mobile Only)
+let savedScrollPosition = 0;
+
+const openImageModal = (imageSrc, imageAlt) => {
+    // Only work on mobile devices
+    if (window.innerWidth > 768) return;
     
-    const currentSize = mainContent.style.fontSize || '';
-    const sizes = ['', '0.875rem', '1rem', '1.125rem', '1.25rem'];
-    const currentIndex = sizes.indexOf(currentSize);
-    const nextIndex = (currentIndex + 1) % sizes.length;
-    mainContent.style.fontSize = sizes[nextIndex];
+    const modal = document.getElementById('image-modal');
+    const modalImage = document.getElementById('modal-image');
+    const mainContent = document.getElementById('main-content');
+    
+    if (!modal || !modalImage || !mainContent) return;
+    
+    // Save current scroll position
+    savedScrollPosition = mainContent.scrollTop;
+    
+    modalImage.src = imageSrc;
+    modalImage.alt = imageAlt || 'Image';
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden'; // Prevent background scrolling
 };
 
-const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(err => {
-            console.log('Error attempting to enable fullscreen:', err);
-        });
-    } else {
-        document.exitFullscreen();
+const closeImageModal = () => {
+    const modal = document.getElementById('image-modal');
+    const mainContent = document.getElementById('main-content');
+    
+    if (!modal || !mainContent) return;
+    
+    // Reset viewport zoom to 1.0 to prevent staying zoomed
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+        // After a short delay, re-enable user scaling for normal reading
+        setTimeout(() => {
+            viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
+        }, 100);
     }
+    
+    modal.classList.remove('active');
+    document.body.style.overflow = ''; // Restore scrolling
+    
+    // Restore scroll position after a short delay to ensure modal is closed
+    setTimeout(() => {
+        mainContent.scrollTo(0, savedScrollPosition);
+    }, 100);
 };
 
 // Add event delegation for immediate button functionality
@@ -157,6 +230,45 @@ document.addEventListener('click', (event) => {
             event.preventDefault();
             toggleFullscreen();
             break;
+        case 'modal-close':
+            event.preventDefault();
+            closeImageModal();
+            break;
+    }
+});
+
+// Image click handler - overlay handles TOC blocking
+document.addEventListener('click', (event) => {
+    // Only work on mobile devices
+    if (window.innerWidth > 768) return;
+    
+    const img = event.target.closest('img');
+    if (!img || !img.closest('.content-body')) return;
+    
+    // Open modal - overlay will prevent this from being reached if TOC is open
+    event.preventDefault();
+    event.stopPropagation();
+    openImageModal(img.src, img.alt);
+});
+
+// Handle modal background clicks to close
+document.addEventListener('click', (event) => {
+    const modal = document.getElementById('image-modal');
+    if (event.target === modal) {
+        closeImageModal();
+    }
+});
+
+// Handle keyboard shortcuts for modal (mobile only)
+document.addEventListener('keydown', (event) => {
+    // Only work on mobile devices
+    if (window.innerWidth > 768) return;
+    
+    const modal = document.getElementById('image-modal');
+    if (!modal || !modal.classList.contains('active')) return;
+    
+    if (event.key === 'Escape') {
+        closeImageModal();
     }
 });
 
@@ -190,6 +302,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const topbarContainer = document.getElementById('topbar-container');
     const mainContent = document.getElementById('main-content');
 
+    // Close TOC when clicking on the overlay shield
+    const tocOverlay = document.getElementById('toc-overlay');
+    if (tocOverlay) {
+        tocOverlay.addEventListener('click', (event) => {
+            // Don't close TOC if clicking on the sidebar itself
+            if (event.target.closest('#sidebar-container')) {
+                return;
+            }
+            
+            // Close the TOC when overlay is clicked
+            if (appContainer && appContainer.classList.contains('sidebar-open')) {
+                event.preventDefault();
+                event.stopPropagation();
+                toggleSidebar();
+            }
+        });
+    }
+
     // Utility function for instant navigation without scrolling
     const scrollToElement = (element, smooth = false) => {
         if (!element) return;
@@ -205,59 +335,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const contentIdMapping = APP_DATA.content_id_mapping || {};
     
     // --- Handlers ---
-    
-    const navigateChapter = (direction) => {
-        const chapters = Array.from(document.querySelectorAll('.chapter'));
-        if (chapters.length === 0) return;
-        
-        const currentScroll = mainContent.scrollTop;
-        const topbarHeight = topbarContainer.offsetHeight;
-        const viewportHeight = mainContent.clientHeight;
-        let targetChapter = null;
-
-        if (direction === 'next') {
-            // Find the next chapter that is not currently visible
-            for(const chapter of chapters) {
-                const chapterTop = chapter.offsetTop;
-                const chapterBottom = chapterTop + chapter.offsetHeight;
-                const visibleBottom = currentScroll + viewportHeight;
-                
-                // If this chapter is below the current viewport, navigate to it
-                if (chapterTop >= visibleBottom) {
-                    targetChapter = chapter;
-                    break;
-                }
-            }
-            
-            // If no chapter found below viewport, go to the last chapter
-            if (!targetChapter) {
-                targetChapter = chapters[chapters.length - 1];
-            }
-        } else { // 'prev'
-            // Find the previous chapter by looking for the last chapter that starts before the current scroll position
-            for(let i = chapters.length - 1; i >= 0; i--) {
-                const chapter = chapters[i];
-                const chapterTop = chapter.offsetTop;
-                const chapterBottom = chapterTop + chapter.offsetHeight;
-                const visibleTop = currentScroll;
-                
-                // If this chapter is completely above the current viewport, it's a valid previous chapter
-                if (chapterBottom < visibleTop) {
-                    targetChapter = chapter;
-                    break;
-                }
-            }
-            
-            // If no previous chapter found, go to the first chapter
-            if (!targetChapter) {
-                targetChapter = chapters[0];
-            }
-        }
-        
-        if (targetChapter) {
-            scrollToElement(targetChapter, false);
-        }
-    };
 
 
     const toggleFullscreen = () => {
@@ -344,12 +421,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (topToolbar) topToolbar.classList.add('fullscreen-hidden');
         } else {
             appContainer.classList.remove('is-fullscreen');
-            if (topToolbar) topToolbar.classList.remove('fullscreen-hidden');
+            if (topToolbar) {
+                topToolbar.classList.remove('fullscreen-hidden');
+                // Force visibility restoration on mobile
+                topToolbar.style.opacity = '1';
+                topToolbar.style.visibility = 'visible';
+                topToolbar.style.pointerEvents = 'auto';
+            }
             // ensure any polling is stopped when we detect exit
             stopFullscreenPoll();
         }
-        // The CSS handles padding/layout for .is-fullscreen, avoid inline styles
-        // Force a reflow to ensure the UI updates correctly, especially on mobile.
+        
+        // Force a reflow to ensure the UI updates correctly, especially on mobile
         if (topToolbar) {
             topToolbar.style.display = 'none';
             topToolbar.offsetHeight; // Trigger a reflow
