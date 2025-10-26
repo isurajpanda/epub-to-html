@@ -4,6 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
+    
+    <meta name="description" content="{% if metadata.get('description') and metadata.get('description') != 'None' %}{{ metadata.get('description') }}{% else %}Read {{ title }} online. A digital book reader with optimized viewing experience.{% endif %}">
+    <meta name="author" content="{{ metadata.get('author', 'Unknown') }}">
+    <meta name="keywords" content="{{ title }}, epub, digital book, reader{% if metadata.get('subject') %}, {{ metadata.get('subject')|join(', ') }}{% endif %}">
+    {% if metadata.get('publisher') %}<meta name="publisher" content="{{ metadata.get('publisher') }}">{% endif %}
+    {% if metadata.get('date') %}<meta name="date" content="{{ metadata.get('date') }}">{% endif %}
+    {% if metadata.get('language') %}<meta name="language" content="{{ metadata.get('language') }}">{% endif %}
+    <meta property="og:title" content="{{ title }}">
+    <meta property="og:type" content="book">
+    {% if metadata.get('author') %}<meta property="og:author" content="{{ metadata.get('author') }}">{% endif %}
+    <meta property="og:description" content="{{ metadata.get('description', 'Read ' + title + ' online.') }}">
+    
     <link rel="stylesheet" href="./static/style.css">
     {% if custom_css %}
     <style>
@@ -11,7 +23,6 @@
     </style>
     {% endif %}
     
-    <!-- Load JavaScript early for immediate functionality -->
     <script src="./static/script.js"></script>
     <script id="app-data" type="application/json">
         {{ metadata_json }}
@@ -29,7 +40,6 @@
                     </div>
                 </div>
                 <div class="toc-view" id="toc-list">
-                    <!-- TOC items will be populated by JavaScript -->
                 </div>
             </div>
         </aside>
@@ -65,10 +75,8 @@
         </div>
     </div>
 
-    <!-- Invisible overlay to block clicks when TOC is open -->
     <div id="toc-overlay" class="toc-overlay"></div>
 
-    <!-- Image Popup Modal (Mobile Only) -->
     <div id="image-modal" class="image-modal">
         <div class="image-modal-content">
             <img id="modal-image" src="" alt="Image">

@@ -115,7 +115,12 @@ class EPUBParser:
             book_meta = {
                 'title': 'Untitled',
                 'author': 'Unknown Author',
-                'cover_image_path': None
+                'cover_image_path': None,
+                'description': None,
+                'publisher': None,
+                'date': None,
+                'subject': [],
+                'language': None
             }
             
             # Try to get title
@@ -133,6 +138,31 @@ class EPUBParser:
                 print(f"  Extracted Author: {book_meta['author']}")
             else:
                 print(f"  Warning: Could not extract Author. Defaulting to '{book_meta['author']}'")
+
+            # Try to get description
+            description_elem = metadata.find('.//dc:description', self.ns)
+            if description_elem is not None and description_elem.text:
+                book_meta['description'] = description_elem.text.strip()
+
+            # Try to get publisher
+            publisher_elem = metadata.find('.//dc:publisher', self.ns)
+            if publisher_elem is not None and publisher_elem.text:
+                book_meta['publisher'] = publisher_elem.text.strip()
+
+            # Try to get date
+            date_elem = metadata.find('.//dc:date', self.ns)
+            if date_elem is not None and date_elem.text:
+                book_meta['date'] = date_elem.text.strip()
+
+            # Try to get subjects
+            subject_elems = metadata.findall('.//dc:subject', self.ns)
+            if subject_elems:
+                book_meta['subject'] = [elem.text.strip() for elem in subject_elems if elem.text]
+
+            # Try to get language
+            language_elem = metadata.find('.//dc:language', self.ns)
+            if language_elem is not None and language_elem.text:
+                book_meta['language'] = language_elem.text.strip()
 
             # Find cover image
             cover_id = (metadata.find('.//opf:meta[@name="cover"]', self.ns) or ET.Element('meta')).get('content')

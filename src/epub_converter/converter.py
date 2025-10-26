@@ -55,7 +55,30 @@ class EPUBConverter:
 
                     return f'{tag_start}{quote}{new_src}{quote}'
 
-                body_content = re.sub(r'(<img\b[^>]*\ssrc\s*=\s*)(["\'])(.*?)\2', replace_img_src_in_chapter, body_content, flags=re.IGNORECASE | re.DOTALL)
+                def replace_img_tags(match):
+                    """Replace image src while preserving all alt attributes"""
+                    full_img_tag = match.group(0)
+                    
+                    # Extract alt attribute if it exists
+                    alt_match = re.search(r'\salt\s*=\s*(["\'])(.*?)\1', full_img_tag, re.IGNORECASE)
+                    has_alt = alt_match is not None
+                    alt_text = alt_match.group(2) if alt_match else ''
+                    
+                    # Replace src attribute
+                    replaced_tag = re.sub(r'(<img\b[^>]*\ssrc\s*=\s*)(["\'])(.*?)\2', replace_img_src_in_chapter, full_img_tag, flags=re.IGNORECASE | re.DOTALL)
+                    
+                    # If no alt attribute exists, add one with the filename
+                    if not has_alt:
+                        src_match = re.search(r'src\s*=\s*["\']([^"\']+)["\']', replaced_tag, re.IGNORECASE)
+                        if src_match:
+                            image_path = src_match.group(1)
+                            image_name = Path(image_path).stem
+                            # Insert alt attribute before the closing >
+                            replaced_tag = re.sub(r'(\s*)(>)', r'\1alt="' + image_name + r'"\2', replaced_tag, count=1)
+                    
+                    return replaced_tag
+
+                body_content = re.sub(r'<img\b[^>]+>', replace_img_tags, body_content, flags=re.IGNORECASE | re.DOTALL)
 
                 combined_body.append(f'''<div class="chapter" id="page{i:02d}">
 {body_content}
@@ -370,5 +393,6 @@ class EPUBConverter:
             title=title,
             body_content=body_content,
             metadata_json=metadata_json,
+            metadata=metadata,
             custom_css=custom_css
         )
