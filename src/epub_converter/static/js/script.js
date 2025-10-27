@@ -594,7 +594,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Set book cover
     if (APP_DATA.cover_image_url && bookCover) {
-        bookCover.src = APP_DATA.cover_image_url;
+        // Only set src if it's not already set in the HTML (server-side rendered)
+        if (!bookCover.src || bookCover.src === '') {
+            bookCover.src = APP_DATA.cover_image_url;
+        }
         bookCover.style.display = 'block';
     }
 

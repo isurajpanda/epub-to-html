@@ -31,10 +31,11 @@ from .parser import EPUBParser
 from .image_processor import ImageProcessor
 
 class EPUBConverter:
-    def __init__(self, epub_path, output_folder=None, custom_css_path=None):
+    def __init__(self, epub_path, output_folder=None, custom_css_path=None, no_script=False):
         self.epub_path = Path(epub_path)
         self.output_folder = Path(output_folder) if output_folder else self.epub_path.parent
         self.custom_css_path = custom_css_path
+        self.no_script = no_script
         self.temp_dir = None
         self.image_processor = ImageProcessor()
         
@@ -144,7 +145,7 @@ class EPUBConverter:
         self.js_block_comment_pattern = re.compile(r'/\*.*?\*/', re.DOTALL)
         self.js_whitespace_pattern = re.compile(r'\s+')
 
-    def _process_content_file(self, content_file_info, extract_dir, path_mapping):
+    def _process_content_file(self, content_file_info, extract_dir, path_mapping, metadata=None):
         """Process a single content file and return the processed content."""
         i, content_file_path = content_file_info
         try:
@@ -175,8 +176,11 @@ class EPUBConverter:
                 return f'{tag_start}{quote}{new_src}{quote}'
 
             def replace_img_tags(match):
-                """Replace image src while preserving all alt attributes"""
+                """Replace image src while preserving all alt attributes and adding appropriate loading"""
                 full_img_tag = match.group(0)
+                
+                # Check if loading attribute already exists
+                has_loading = 'loading=' in full_img_tag.lower()
                 
                 # Extract alt attribute if it exists
                 alt_match = self.img_alt_pattern.search(full_img_tag)
@@ -194,6 +198,24 @@ class EPUBConverter:
                         image_name = Path(image_path).stem
                         # Insert alt attribute before the closing >
                         replaced_tag = self.img_close_pattern.sub(r'\1alt="' + image_name + r'"\2', replaced_tag, count=1)
+                
+                # Add appropriate loading attribute if not already present
+                if not has_loading:
+                    # Check if this is the cover image (first image in first chapter)
+                    src_match = self.img_src_extract_pattern.search(replaced_tag)
+                    if src_match:
+                        image_path = src_match.group(1)
+                        # Check if this is the cover image by comparing with cover_image_url
+                        cover_image_url = metadata.get('cover_image_url')
+                        if cover_image_url and image_path == cover_image_url:
+                            # Cover image should be eager-loaded for LCP
+                            replaced_tag = replaced_tag.replace('>', ' loading="eager" fetchpriority="high">', 1)
+                        else:
+                            # Other images should be lazy-loaded
+                            replaced_tag = replaced_tag.replace('>', ' loading="lazy">', 1)
+                    else:
+                        # Fallback to lazy loading if we can't determine the image
+                        replaced_tag = replaced_tag.replace('>', ' loading="lazy">', 1)
                 
                 return replaced_tag
 
@@ -214,7 +236,7 @@ class EPUBConverter:
             combined_body = []
             for i, (_, content_file_path) in enumerate(content_files, 1):
                 print(f"    {i}. {content_file_path.name}")
-                result = self._process_content_file((i, content_file_path), extract_dir, path_mapping)
+                result = self._process_content_file((i, content_file_path), extract_dir, path_mapping, metadata)
                 if result:
                     combined_body.append(result)
         else:  # For larger numbers of files, use parallel processing
@@ -224,7 +246,7 @@ class EPUBConverter:
             with ThreadPoolExecutor(max_workers=min(len(content_files), 8)) as executor:
                 # Submit all content file processing tasks
                 future_to_file = {
-                    executor.submit(self._process_content_file, (i, content_file_path), extract_dir, path_mapping): (i, content_file_path)
+                    executor.submit(self._process_content_file, (i, content_file_path), extract_dir, path_mapping, metadata): (i, content_file_path)
                     for i, (_, content_file_path) in enumerate(content_files, 1)
                 }
                 
@@ -433,7 +455,9 @@ class EPUBConverter:
             opf_file = parser.find_opf_file(extract_dir)
             
             # Always create output folder next to the EPUB file
-            epub_output_folder = epub_path.parent / epub_path.stem
+            # Strip trailing spaces and other problematic characters
+            epub_stem = epub_path.stem.strip()
+            epub_output_folder = epub_path.parent / epub_stem
             
             epub_output_folder.mkdir(exist_ok=True)
             print(f"  Output will be saved to: {epub_output_folder}/")
@@ -442,8 +466,7 @@ class EPUBConverter:
             content_files = parser.find_content_files(opf_file, extract_dir, filtered_hrefs)
             image_files = self.image_processor.find_images(extract_dir)
 
-            path_mapping = self.image_processor.process_images_and_get_mapping(image_files, extract_dir)
-
+            # Detect cover image before processing
             actual_cover_file_path = None
             if metadata.get('cover_image_path'):
                 potential_cover_abs_path = (extract_dir / Path(metadata['cover_image_path'])).resolve()
@@ -467,6 +490,12 @@ class EPUBConverter:
                 except Exception as e:
                     print(f"  Error reading first content file for cover image detection: {e}")
 
+            # Process images with EPUB title and cover image path
+            epub_title = metadata.get('title', 'Unknown')
+            path_mapping = self.image_processor.process_images_and_get_mapping(
+                image_files, extract_dir, epub_output_folder, epub_title, actual_cover_file_path
+            )
+
             cover_image_url = None
             if actual_cover_file_path:
                 try:
@@ -474,8 +503,11 @@ class EPUBConverter:
                     cover_image_url = path_mapping.get(relative_to_extract_dir_path)
                     if not cover_image_url:
                         cover_image_url = path_mapping.get(actual_cover_file_path.name)
+                    # If still not found, use the new naming scheme (cover.avif)
+                    if not cover_image_url:
+                        cover_image_url = "cover.avif"
                 except ValueError:
-                    pass
+                    cover_image_url = "cover.avif"
             
             metadata['cover_image_url'] = cover_image_url
             metadata['epub_filename'] = epub_path.name
@@ -518,37 +550,41 @@ class EPUBConverter:
             with open(output_html, 'w', encoding='utf-8') as f:
                 f.write(final_html)
 
-            # Copy static files directly to static folder (flatten structure)
+            # Handle static files based on --no-script flag
             static_folder = Path(__file__).parent / "static"
             output_static_folder = epub_output_folder / "static"
             
-            # Remove existing static folder to clean up old structure
+            # Remove existing static folder if it exists (clean up from previous runs)
             if output_static_folder.exists():
                 shutil.rmtree(output_static_folder)
             
-            output_static_folder.mkdir(exist_ok=True)
-            
-            # Copy and minify CSS file
-            css_source = static_folder / "css" / "style.css"
-            css_dest = output_static_folder / "style.css"
-            if css_source.exists():
-                with open(css_source, 'r', encoding='utf-8') as f:
-                    css_content = f.read()
-                minified_css = self._minify_css(css_content)
-                with open(css_dest, 'w', encoding='utf-8') as f:
-                    f.write(minified_css)
-                print(f"  Minified CSS: {len(css_content)} -> {len(minified_css)} characters")
-            
-            # Copy and minify JS file
-            js_source = static_folder / "js" / "script.js"
-            js_dest = output_static_folder / "script.js"
-            if js_source.exists():
-                with open(js_source, 'r', encoding='utf-8') as f:
-                    js_content = f.read()
-                minified_js = self._minify_js(js_content)
-                with open(js_dest, 'w', encoding='utf-8') as f:
-                    f.write(minified_js)
-                print(f"  Minified JS: {len(js_content)} -> {len(minified_js)} characters")
+            # Copy static files unless --no-script flag is set
+            if not self.no_script:
+                output_static_folder.mkdir(exist_ok=True)
+                
+                # Copy and minify CSS file
+                css_source = static_folder / "css" / "style.css"
+                css_dest = output_static_folder / "style.css"
+                if css_source.exists():
+                    with open(css_source, 'r', encoding='utf-8') as f:
+                        css_content = f.read()
+                    minified_css = self._minify_css(css_content)
+                    with open(css_dest, 'w', encoding='utf-8') as f:
+                        f.write(minified_css)
+                    print(f"  Minified CSS: {len(css_content)} -> {len(minified_css)} characters")
+                
+                # Copy and minify JS file
+                js_source = static_folder / "js" / "script.js"
+                js_dest = output_static_folder / "script.js"
+                if js_source.exists():
+                    with open(js_source, 'r', encoding='utf-8') as f:
+                        js_content = f.read()
+                    minified_js = self._minify_js(js_content)
+                    with open(js_dest, 'w', encoding='utf-8') as f:
+                        f.write(minified_js)
+                    print(f"  Minified JS: {len(js_content)} -> {len(minified_js)} characters")
+            else:
+                print(f"  Skipping static files (--no-script mode)")
 
             print(f"  Created: {output_html.resolve()}")
 
@@ -682,5 +718,6 @@ class EPUBConverter:
             body_content=body_content,
             metadata_json=metadata_json,
             metadata=metadata,
-            custom_css=custom_css
+            custom_css=custom_css,
+            no_script=self.no_script
         )

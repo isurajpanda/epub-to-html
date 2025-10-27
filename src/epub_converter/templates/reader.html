@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="public, max-age=31536000">
     <title>{{ title }}</title>
     
     <meta name="description" content="{% if metadata.get('description') and metadata.get('description') != 'None' %}{{ metadata.get('description') }}{% else %}Read {{ title }} online. A digital book reader with optimized viewing experience.{% endif %}">
@@ -13,17 +14,21 @@
     {% if metadata.get('language') %}<meta name="language" content="{{ metadata.get('language') }}">{% endif %}
     <meta property="og:title" content="{{ title }}">
     <meta property="og:type" content="book">
-    {% if metadata.get('author') %}<meta property="og:author" content="{{ metadata.get('author') }}">{% endif %}
+    {% if metadata.get('author') %}    <meta property="og:author" content="{{ metadata.get('author') }}">{% endif %}
     <meta property="og:description" content="{{ metadata.get('description', 'Read ' + title + ' online.') }}">
     
-    <link rel="stylesheet" href="./static/style.css">
+    <!-- Preload cover image for better LCP performance -->
+    {% if metadata.get('cover_image_url') %}
+    <link rel="preload" href="{{ metadata.get('cover_image_url') }}" as="image" fetchpriority="high">
+    {% endif %}
+    
+    <link rel="stylesheet" href="/static/style.css" crossorigin="anonymous">
     {% if custom_css %}
     <style>
         {{ custom_css }}
     </style>
     {% endif %}
     
-    <script src="./static/script.js"></script>
     <script id="app-data" type="application/json">
         {{ metadata_json }}
     </script>
@@ -33,7 +38,11 @@
         <aside id="sidebar-container">
             <div class="toc-sidebar">
                 <div class="toc-sidebar-header">
+                    {% if metadata.get('cover_image_url') %}
+                    <img id="book-cover" src="{{ metadata.get('cover_image_url') }}" alt="Book cover" fetchpriority="high" loading="eager">
+                    {% else %}
                     <img id="book-cover" src="" alt="Book cover" style="display: none;">
+                    {% endif %}
                     <div class="book-info">
                         <h1 id="book-title" style="display: none;"></h1>
                         <p id="book-author" style="display: none;"></p>
@@ -90,5 +99,6 @@
         </div>
     </div>
 
+    <script src="/static/script.js" crossorigin="anonymous" defer></script>
 </body>
 </html>

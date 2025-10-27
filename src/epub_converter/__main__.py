@@ -35,6 +35,8 @@ def main():
     parser.add_argument('--css', help='Path to a custom CSS file.')
     parser.add_argument('--max_workers', type=int, default=100, 
                        help='Maximum number of parallel workers for directory conversion (default: 100).')
+    parser.add_argument('--no-script', action='store_true',
+                       help='Generate HTML only without static JS and CSS files.')
     args = parser.parse_args()
 
     # Detect Python version and threading capabilities
@@ -123,7 +125,7 @@ def main():
     
     print()
 
-    converter = EPUBConverter(args.epub_path, args.output_dir, args.css)
+    converter = EPUBConverter(args.epub_path, args.output_dir, args.css, no_script=args.no_script)
     converter.convert(max_workers=args.max_workers)
 
 if __name__ == "__main__":

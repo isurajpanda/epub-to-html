@@ -347,7 +347,11 @@ class EPUBParser:
                 book_meta['language'] = language_elem.text.strip()
 
             # Find cover image
-            cover_id = (metadata.find('.//opf:meta[@name="cover"]', self.ns) or ET.Element('meta')).get('content')
+            cover_meta = metadata.find('.//opf:meta[@name="cover"]', self.ns)
+            if cover_meta is not None:
+                cover_id = cover_meta.get('content')
+            else:
+                cover_id = None
             print(f"  Detected cover_id from metadata: {cover_id}")
 
             if cover_id:

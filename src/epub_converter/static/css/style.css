@@ -223,8 +223,10 @@ html, body {
     justify-self: center;
     box-sizing: border-box;
 }
-a { color: var(--link-color); }
-a:visited { color: var(--link-visited); }
+.content-body a { color: var(--link-color); }
+.content-body a * { color: var(--link-color); }
+.content-body a:visited { color: var(--link-visited); }
+.content-body a:visited * { color: var(--link-visited); }
 hr.chapter-separator { margin: 3em 0; border: none; border-top: 1px solid var(--separator-color); }
 img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 
