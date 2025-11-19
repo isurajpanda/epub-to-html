@@ -1136,10 +1136,31 @@ class EPUBConverter:
     def get_html_template(self, title, body_content, metadata, custom_css=None):
         """Returns the complete HTML structure with embedded CSS and JS."""
         template = self.jinja_env.get_template("reader.html")
+        
+        # Sanitize metadata to remove sensitive information
+        # Only include fields that are actually used by the frontend JavaScript
+        sanitized_metadata = {
+            'title': metadata.get('title'),
+            'author': metadata.get('author'),
+            'publisher': metadata.get('publisher'),
+            'date': metadata.get('date'),
+            'description': metadata.get('description'),
+            'subject': metadata.get('subject', []),
+            'language': metadata.get('language'),
+            'cover_image_url': metadata.get('cover_image_url'),
+            'epub_filename': metadata.get('epub_filename'),
+            'epub_filename_base': metadata.get('epub_filename_base'),
+            'epub_filename_base_url': metadata.get('epub_filename_base_url'),
+            'epub_filename_cdn_base_url': metadata.get('epub_filename_cdn_base_url'),
+            'toc': metadata.get('toc', []),
+            # Note: content_id_mapping is removed as it's not needed by frontend
+            # and contains EPUB internal structure (OEBPS paths, etc.)
+        }
+        
         if HAS_ORJSON:
-            metadata_json = json.dumps(metadata).decode('utf-8')
+            metadata_json = json.dumps(sanitized_metadata).decode('utf-8')
         else:
-            metadata_json = json.dumps(metadata)
+            metadata_json = json.dumps(sanitized_metadata)
         return template.render(
             title=title,
             body_content=body_content,
