@@ -19,7 +19,9 @@
     --transition-duration: 0.3s;
     --transition-easing: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
-html, body {
+
+html,
+body {
     margin: 0;
     padding: 0;
     background-color: var(--bg-color);
@@ -27,28 +29,38 @@ html, body {
     font-family: serif;
     line-height: 1.6;
 }
+
+/* Hide series title when CSS is loaded - only visible as fallback */
+.series-title {
+    display: none;
+}
+
 #app-container {
     display: flex;
     height: 100vh;
     overflow: hidden;
     position: relative;
 }
+
 #sidebar-container {
     position: fixed;
     top: 0;
-    left: 0; /* occupy layout slot but moved off-screen with transform */
+    left: 0;
+    /* occupy layout slot but moved off-screen with transform */
     width: var(--sidebar-width);
     height: 100%;
     /* Sidebar should be above toolbar but below right controls */
     z-index: 1200;
     /* Use transform for smoother, GPU-accelerated animation */
-    transform: translateX(calc(-100% - 2px)); /* Extra buffer to ensure complete hiding */
-    transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
+    transform: translateX(calc(-100% - 2px));
+    /* Extra buffer to ensure complete hiding */
+    transition: transform 0.26s cubic-bezier(.2, .9, .2, 1);
     will-change: transform;
-    box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+    box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
     /* Ensure no edge is visible when closed */
     overflow: hidden;
 }
+
 #content-wrapper {
     flex-grow: 1;
     display: flex;
@@ -66,6 +78,7 @@ html, body {
     margin-top: 0;
     height: 100vh;
 }
+
 #app-container.sidebar-open #sidebar-container {
     transform: translateX(0);
 }
@@ -78,6 +91,7 @@ html, body {
         transform: translateX(calc(var(--sidebar-width) * 0.5));
     }
 }
+
 #main-content {
     overflow-y: auto;
     overflow-x: hidden;
@@ -88,7 +102,7 @@ html, body {
     touch-action: pan-y;
     will-change: scroll-position, transform;
     /* Allow the main content to be transformed when the sidebar opens */
-    transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
+    transition: transform 0.26s cubic-bezier(.2, .9, .2, 1);
     /* Ensure anchor scrolling accounts for the fixed toolbar */
     scroll-padding-top: var(--topbar-height);
     /* Use CSS Grid for perfect centering */
@@ -125,32 +139,32 @@ html, body {
         width: 8px;
         height: 8px;
     }
-    
+
     #main-content::-webkit-scrollbar-track {
         background: rgba(255, 255, 255, 0.05);
         border-radius: 4px;
     }
-    
+
     #main-content::-webkit-scrollbar-thumb {
         background-color: rgba(255, 255, 255, 0.3);
         border-radius: 4px;
         border: 1px solid rgba(255, 255, 255, 0.1);
         transition: background-color 0.2s ease, border-color 0.2s ease;
     }
-    
+
     #main-content::-webkit-scrollbar-thumb:hover {
         background-color: rgba(255, 255, 255, 0.45);
         border-color: rgba(255, 255, 255, 0.2);
     }
-    
+
     #main-content::-webkit-scrollbar-thumb:active {
         background-color: rgba(255, 255, 255, 0.5);
     }
-    
+
     #main-content::-webkit-scrollbar-corner {
         background: transparent;
     }
-    
+
     /* Fallback for browsers that don't support webkit scrollbar */
     #main-content {
         scrollbar-width: thin;
@@ -205,10 +219,11 @@ html, body {
 .toc-view::-webkit-scrollbar-corner {
     background: transparent;
 }
+
 .content-body {
     /* Responsive width that scales with viewport and font size */
-    width: min(48rem, 90vw);
-    max-width: 48rem;
+    max-width: min(48rem, 90vw);
+    width: 100%;
     padding: 1.5rem;
     font-size: clamp(1rem, 1.2rem, 1.5rem);
     /* Ensure content doesn't overflow horizontally on mobile */
@@ -216,49 +231,74 @@ html, body {
     overflow-wrap: break-word;
     hyphens: auto;
     /* Smooth transitions for font size and layout changes */
-    transition: width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
-                padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
-                font-size 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition: max-width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+        padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+        font-size 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
     /* Ensure proper centering */
     justify-self: center;
     box-sizing: border-box;
 }
-.content-body a { color: var(--link-color); }
-.content-body a * { color: var(--link-color); }
-.content-body a:visited { color: var(--link-visited); }
-.content-body a:visited * { color: var(--link-visited); }
-hr.chapter-separator { margin: 3em 0; border: none; border-top: 1px solid var(--separator-color); }
-img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
+
+.content-body a {
+    color: var(--link-color);
+}
+
+.content-body a * {
+    color: var(--link-color);
+}
+
+.content-body a:visited {
+    color: var(--link-visited);
+}
+
+.content-body a:visited * {
+    color: var(--link-visited);
+}
+
+hr.chapter-separator {
+    margin: 3em 0;
+    border: none;
+    border-top: 1px solid var(--separator-color);
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 1em auto;
+}
 
 /* Responsive padding adjustments for different screen sizes */
 @media (max-width: 480px) {
     #main-content {
         padding: 0.5rem;
     }
-    
+
     /* Adjust top bar positioning on mobile to prevent image cropping */
     .top-toolbar {
         top: 25px;
     }
-    
+
     .top-toolbar .top-left-controls {
-        top: 29px; /* 25px + 4px offset */
+        top: 29px;
+        /* 25px + 4px offset */
     }
-    
+
     .top-toolbar .top-right-controls {
-        top: 29px; /* 25px + 4px offset */
+        top: 29px;
+        /* 25px + 4px offset */
     }
-    
+
     /* Adjust content wrapper margin to account for lower top bar */
     #content-wrapper {
         margin-top: 48px;
     }
-    
+
     /* Adjust scroll padding to match the lower top bar position */
     #main-content {
         scroll-padding-top: 50px;
     }
-    
+
     /* Remove the extra padding from first image since top bar is now positioned correctly */
     .content-body img.cover:first-of-type {
         padding-top: 0;
@@ -290,7 +330,9 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 }
 
 /* Prevent long words from breaking layout */
-.content-body p, .content-body div, .content-body span {
+.content-body p,
+.content-body div,
+.content-body span {
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -301,14 +343,31 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
         width: min(48rem, 95vw);
         padding: 0.75rem;
     }
-    
+
     /* Font size responsive widths */
-    .content-body.text-lg { width: min(42rem, 93vw); }
-    .content-body.text-xl { width: min(38rem, 91vw); }
-    .content-body.text-2xl { width: min(34rem, 89vw); }
-    .content-body.text-3xl { width: min(30rem, 87vw); }
-    .content-body.text-4xl { width: min(26rem, 85vw); }
-    .content-body.text-5xl { width: min(22rem, 83vw); }
+    .content-body.text-lg {
+        width: min(42rem, 93vw);
+    }
+
+    .content-body.text-xl {
+        width: min(38rem, 91vw);
+    }
+
+    .content-body.text-2xl {
+        width: min(34rem, 89vw);
+    }
+
+    .content-body.text-3xl {
+        width: min(30rem, 87vw);
+    }
+
+    .content-body.text-4xl {
+        width: min(26rem, 85vw);
+    }
+
+    .content-body.text-5xl {
+        width: min(22rem, 83vw);
+    }
 }
 
 @media (max-width: 480px) {
@@ -316,30 +375,52 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
         width: min(48rem, 94vw);
         padding: 0.5rem;
     }
-    
-    .content-body.text-lg { width: min(38rem, 92vw); }
-    .content-body.text-xl { width: min(34rem, 90vw); }
-    .content-body.text-2xl { width: min(30rem, 88vw); }
-    .content-body.text-3xl { width: min(26rem, 86vw); }
-    .content-body.text-4xl { width: min(22rem, 84vw); }
-    .content-body.text-5xl { width: min(18rem, 82vw); }
+
+    .content-body.text-lg {
+        width: min(38rem, 92vw);
+    }
+
+    .content-body.text-xl {
+        width: min(34rem, 90vw);
+    }
+
+    .content-body.text-2xl {
+        width: min(30rem, 88vw);
+    }
+
+    .content-body.text-3xl {
+        width: min(26rem, 86vw);
+    }
+
+    .content-body.text-4xl {
+        width: min(22rem, 84vw);
+    }
+
+    .content-body.text-5xl {
+        width: min(18rem, 82vw);
+    }
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1025px) {
+
     /*
-      Make desktop content match an approximate "63% zoom" feel by using
-      a viewport-relative width (63vw) while constraining it with sensible
-      minimum and maximum values to avoid too-narrow or too-wide lines.
+      Make desktop content wider by using viewport-relative width (70vw)
+      while constraining it with sensible minimum and maximum values.
       clamp(min, preferred, max) ensures the content remains readable.
+      Maximum width is 90rem (1440px) for comfortable reading on large screens.
     */
     .content-body {
-        max-width: clamp(48rem, 63vw, 72rem);
+        max-width: clamp(48rem, 70vw, 90rem);
         margin: 0 auto;
     }
+
     /* Update the content max variable to reflect the larger desktop sizing
        so any responsive calculations (like when the sidebar opens) use the
        correct target width. */
-    :root { --content-max: clamp(48rem, 63vw, 72rem); }
+    :root {
+        --content-max: clamp(48rem, 70vw, 90rem);
+    }
+
     /* Add extra left/right padding on desktop for breathing room */
     #main-content {
         padding-left: 4rem;
@@ -348,33 +429,87 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 }
 
 @media (min-width: 1600px) {
+
     /* For ultra-wide screens, increase side padding while clamp still caps width */
     #main-content {
         padding-left: 6rem;
         padding-right: 6rem;
     }
 }
+
 /* UI Components from toc_and_topbar.js */
 .toc-sidebar {
-    width: 100%; height: 100%; background: var(--sidebar-bg);
-    box-shadow: 0 0 0 1px var(--sidebar-border); display: flex; flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background: var(--sidebar-bg);
+    box-shadow: 0 0 0 1px var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
     font-family: sans-serif;
 }
+
 .toc-sidebar-header {
-    display: flex; align-items: center; padding: 1rem; border-bottom: 1px solid var(--sidebar-border);
+    display: flex;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--sidebar-border);
 }
-.toc-sidebar-header img { width: 80px; height: auto; border-radius: 3px; margin-right: 0.75rem; object-fit: cover; }
-.toc-sidebar-header h1 { font-size: 1.1em; margin: 0; color: var(--text-color); font-family: sans-serif; }
-.toc-sidebar-header p { font-size: small; color: var(--sidebar-text); margin-top: 0.2rem; font-family: sans-serif; }
-.toc-view { padding: .5rem; overflow-y: auto; flex-grow: 1; }
-.toc-view ul { list-style: none; padding: 0; margin: 0; }
-.toc-view a, .toc-view span {
-    display: block; padding: 8px 12px; text-decoration: none; color: var(--sidebar-text);
-    border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+
+.toc-sidebar-header img {
+    width: 80px;
+    height: auto;
+    border-radius: 3px;
+    margin-right: 0.75rem;
+    object-fit: cover;
+}
+
+.toc-sidebar-header h1 {
+    font-size: 1.1em;
+    margin: 0;
+    color: var(--text-color);
     font-family: sans-serif;
 }
-.toc-view a:hover { background: var(--sidebar-hover-bg); }
-.toc-view ul ul { padding-left: 1rem; }
+
+.toc-sidebar-header p {
+    font-size: small;
+    color: var(--sidebar-text);
+    margin-top: 0.2rem;
+    font-family: sans-serif;
+}
+
+.toc-view {
+    padding: .5rem;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.toc-view ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.toc-view a,
+.toc-view span {
+    display: block;
+    padding: 8px 12px;
+    text-decoration: none;
+    color: var(--sidebar-text);
+    border-radius: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: sans-serif;
+}
+
+.toc-view a:hover {
+    background: var(--sidebar-hover-bg);
+}
+
+.toc-view ul ul {
+    padding-left: 1rem;
+}
+
 .top-toolbar {
     /* Fixed toolbar so its right-side controls remain visible while the
        content-wrapper and main content can be translated underneath. */
@@ -382,16 +517,24 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
     top: 0;
     left: 0;
     right: 0;
-    display: flex; justify-content: space-between; align-items: center; height: var(--topbar-height);
-    padding: 0 10px; background: var(--topbar-bg); backdrop-filter: blur(8px);
-    border-bottom: 1px solid var(--sidebar-border); flex-shrink: 0;
-    transition: opacity var(--transition-duration) var(--transition-easing), 
-                visibility var(--transition-duration) var(--transition-easing), 
-                transform var(--transition-duration) var(--transition-easing);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: var(--topbar-height);
+    padding: 0 10px;
+    background: var(--topbar-bg);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--sidebar-border);
+    flex-shrink: 0;
+    transition: opacity var(--transition-duration) var(--transition-easing),
+        visibility var(--transition-duration) var(--transition-easing),
+        transform var(--transition-duration) var(--transition-easing);
     will-change: opacity, transform;
     transform: translateZ(0);
-    z-index: 1100; /* Base toolbar layer */
+    z-index: 1100;
+    /* Base toolbar layer */
 }
+
 /* The toolbar is fixed to the top and also acts as a positioned container
     for its absolutely-positioned inner controls. */
 /* .top-toolbar remains position: fixed (declared above) so we do not
@@ -400,8 +543,13 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 /* Simplified positioning - both control groups are fixed to viewport */
 /* Loading animation for TOC button */
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 .loading-spinner {
@@ -416,51 +564,104 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 .top-toolbar .top-left-controls {
     position: fixed;
     left: 12px;
-    top: 4px; /* Static positioning: (48px - 40px) / 2 = 4px */
+    top: 4px;
+    /* Static positioning: (48px - 40px) / 2 = 4px */
     display: flex;
     gap: 6px;
-    z-index: 1300; /* Above sidebar, below right controls */
-    transition: transform 0.26s cubic-bezier(.2,.9,.2,1);
+    z-index: 1300;
+    /* Above sidebar, below right controls */
+    transition: transform 0.26s cubic-bezier(.2, .9, .2, 1);
     transform: translateX(0);
 }
 
 .top-toolbar .top-right-controls {
     position: fixed;
     right: 12px;
-    top: 4px; /* Static positioning: (48px - 40px) / 2 = 4px */
+    top: 4px;
+    /* Static positioning: (48px - 40px) / 2 = 4px */
     display: flex;
     gap: 6px;
-    z-index: 1400; /* Highest z-index to stay above sidebar */
+    z-index: 1400;
+    /* Highest z-index to stay above sidebar */
 }
+
 .top-toolbar.fullscreen-hidden {
     opacity: 0 !important;
     visibility: hidden !important;
     pointer-events: none !important;
-    transition: opacity var(--transition-duration) var(--transition-easing), 
-                visibility var(--transition-duration) var(--transition-easing);
+    transition: opacity var(--transition-duration) var(--transition-easing),
+        visibility var(--transition-duration) var(--transition-easing);
 }
-.top-toolbar div { display: flex; align-items: center; }
+
+.top-toolbar div {
+    display: flex;
+    align-items: center;
+}
+
 .top-toolbar button {
-    margin: 0 2px; padding: 10px; border: none; background: none; border-radius: 6px;
-    cursor: pointer; color: var(--text-color); transition: background 0.2s;
-    display: flex; align-items: center; justify-content: center;
+    margin: 0 2px;
+    padding: 10px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.top-toolbar button:hover { background: var(--topbar-button-hover); }
-.top-toolbar svg { width: 22px; height: 22px; }
+
+.top-toolbar button:hover {
+    background: var(--topbar-button-hover);
+}
+
+.top-toolbar svg {
+    width: 22px;
+    height: 22px;
+}
+
 /* Responsive Typography */
-.text-xs { font-size: clamp(0.6rem, 0.75rem, 0.9rem); }
-.text-sm { font-size: clamp(0.7rem, 0.875rem, 1.05rem); }
-.text-base { font-size: clamp(0.8rem, 1rem, 1.2rem); }
-.text-lg { font-size: clamp(0.9rem, 1.125rem, 1.35rem); }
-.text-xl { font-size: clamp(1rem, 1.25rem, 1.5rem); }
-.text-2xl { font-size: clamp(1.2rem, 1.5rem, 1.8rem); }
-.text-3xl { font-size: clamp(1.5rem, 1.875rem, 2.25rem); }
-.text-4xl { font-size: clamp(1.8rem, 2.25rem, 2.7rem); }
-.text-5xl { font-size: clamp(2.4rem, 3rem, 3.6rem); }
+.text-xs {
+    font-size: clamp(0.6rem, 0.75rem, 0.9rem);
+}
+
+.text-sm {
+    font-size: clamp(0.7rem, 0.875rem, 1.05rem);
+}
+
+.text-base {
+    font-size: clamp(0.8rem, 1rem, 1.2rem);
+}
+
+.text-lg {
+    font-size: clamp(0.9rem, 1.125rem, 1.35rem);
+}
+
+.text-xl {
+    font-size: clamp(1rem, 1.25rem, 1.5rem);
+}
+
+.text-2xl {
+    font-size: clamp(1.2rem, 1.5rem, 1.8rem);
+}
+
+.text-3xl {
+    font-size: clamp(1.5rem, 1.875rem, 2.25rem);
+}
+
+.text-4xl {
+    font-size: clamp(1.8rem, 2.25rem, 2.7rem);
+}
+
+.text-5xl {
+    font-size: clamp(2.4rem, 3rem, 3.6rem);
+}
 
 
 /* Responsive base font size */
 @media (min-width: 768px) {
+
     /* Restore the previous content behavior: translate the content by half
        the sidebar width so the central reading area stays roughly centered.
        We'll additionally nudge the left controls so they end up fully
@@ -485,9 +686,10 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
            smaller than the nominal content width. Use min() so we pick the
            smaller of the two — the content will only shrink when necessary. */
         max-width: min(var(--content-max), calc(100vw - var(--sidebar-width) - 4rem));
-        transition: max-width 220ms cubic-bezier(.2,.9,.2,1);
+        transition: max-width 220ms cubic-bezier(.2, .9, .2, 1);
     }
 }
+
 @media (min-width: 769px) and (max-width: 1200px) {
     html {
         font-size: 16px;
@@ -518,7 +720,8 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 .image-modal-content {
     position: relative;
     max-width: 90%;
-    max-height: calc(90% - 60px); /* Leave space for close button */
+    max-height: calc(90% - 60px);
+    /* Leave space for close button */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -529,9 +732,11 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
 
 .image-modal img {
     max-width: 100%;
-    max-height: calc(100% - 60px); /* Leave space for close button */
+    max-height: calc(100% - 60px);
+    /* Leave space for close button */
     object-fit: contain;
-    touch-action: pinch-zoom; /* Enable pinch-to-zoom */
+    touch-action: pinch-zoom;
+    /* Enable pinch-to-zoom */
     user-select: none;
     -webkit-user-drag: none;
 }
@@ -571,7 +776,7 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
         cursor: pointer;
         transition: opacity 0.2s ease;
     }
-    
+
     .content-body img:hover {
         opacity: 0.9;
     }
@@ -582,7 +787,7 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
     .image-modal {
         display: none !important;
     }
-    
+
     .content-body img {
         cursor: default;
     }
@@ -598,13 +803,16 @@ img { max-width: 100%; height: auto; display: block; margin: 0 auto 1em auto; }
         height: 100%;
         background: transparent;
         display: none;
-        z-index: 1000; /* Above content, below TOC sidebar (z-index: 1200) */
-        pointer-events: none; /* Don't block clicks by default */
+        z-index: 1000;
+        /* Above content, below TOC sidebar (z-index: 1200) */
+        pointer-events: none;
+        /* Don't block clicks by default */
     }
 
     .toc-overlay.active {
         display: block;
-        pointer-events: auto; /* Block all clicks when active */
+        pointer-events: auto;
+        /* Block all clicks when active */
     }
 }
 

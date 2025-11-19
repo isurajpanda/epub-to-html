@@ -151,6 +151,10 @@ class EPUBConverter:
         
         # SVG pattern for detecting and replacing SVG elements containing images
         self.svg_pattern = re.compile(r'<svg[^>]*>.*?</svg>', re.DOTALL | re.IGNORECASE)
+        
+        # H1 to H2 conversion patterns
+        self.h1_open_pattern = re.compile(r'<h1\b', re.IGNORECASE)
+        self.h1_close_pattern = re.compile(r'</h1>', re.IGNORECASE)
 
     def _process_content_file(self, content_file_info, extract_dir, path_mapping, metadata=None):
         """Process a single content file and return the processed content."""
@@ -395,6 +399,10 @@ class EPUBConverter:
             # Always process images in content to fix paths (even if --no-image flag is set)
             # This ensures the HTML has the correct image references whether images are converted or not
             body_content = self.img_tag_pattern.sub(replace_img_tags, body_content)
+            
+            # Convert all h1 tags to h2 tags so the series title h1 in the template is the only h1
+            body_content = self.h1_open_pattern.sub('<h2', body_content)
+            body_content = self.h1_close_pattern.sub('</h2>', body_content)
 
             result = f'''<div class="chapter" id="page{i:02d}">
 {body_content}
