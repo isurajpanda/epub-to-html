@@ -1,10 +1,33 @@
 import os
 import hashlib
-import zlib
 from pathlib import Path
 from urllib.parse import unquote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
+
+def crc64(data):
+    """Calculate CRC64-ECMA value for the given data."""
+    # CRC64-ECMA polynomial: 0xC96C5795D7870F42
+    crc = 0xFFFFFFFFFFFFFFFF
+    poly = 0xC96C5795D7870F42
+    table = [0] * 256
+    
+    # Generate table
+    for i in range(256):
+        crc = i
+        for _ in range(8):
+            if crc & 1:
+                crc = (crc >> 1) ^ poly
+            else:
+                crc = crc >> 1
+        table[i] = crc
+        crc = 0xFFFFFFFFFFFFFFFF
+    
+    # Calculate CRC
+    crc = 0xFFFFFFFFFFFFFFFF
+    for byte in data:
+        crc = (crc >> 8) ^ table[(crc ^ byte) & 0xFF]
+    return crc ^ 0xFFFFFFFFFFFFFFFF
 
 # Try to add libvips bin directory to Python's DLL search path
 # This ensures pyvips can find libvips-42.dll even if PATH is not set correctly
@@ -83,6 +106,60 @@ class ImageProcessor:
                 if Path(file).suffix.lower() in image_extensions:
                     image_files.append(Path(root) / file)
         return image_files
+    
+    def filter_images_by_content(self, image_files, content_files):
+        """Filter images to only include those referenced by content files, in reading order."""
+        if not content_files:
+            return image_files
+        
+        # Create a map of filename/path to full path for quick lookup
+        # We map both the filename and the relative path to the full path
+        image_lookup = {}
+        for img_path in image_files:
+            image_lookup[img_path.name] = img_path
+            # Also map absolute path string for direct lookups
+            image_lookup[str(img_path.resolve())] = img_path
+        
+        ordered_images = []
+        seen_images = set()
+        
+        for _, content_path in content_files:
+            try:
+                with open(content_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    # Find all image references in the content
+                    import re
+                    # Match img src="..." or src='...' patterns
+                    for match in re.finditer(r'<img[^>]+src=["\']([^"\\]+)["\\]', content, re.IGNORECASE):
+                        src = match.group(1)
+                        if src.startswith('data:'):
+                            continue
+                            
+                        # Try to resolve the image path
+                        found_image = None
+                        
+                        # Method 1: Try to resolve relative path
+                        try:
+                            abs_path = (content_path.parent / unquote(src)).resolve()
+                            if str(abs_path) in image_lookup:
+                                found_image = image_lookup[str(abs_path)]
+                        except Exception:
+                            pass
+                            
+                        # Method 2: Try by filename
+                        if not found_image:
+                            img_name = Path(src).name
+                            if img_name in image_lookup:
+                                found_image = image_lookup[img_name]
+                        
+                        if found_image and found_image not in seen_images:
+                            seen_images.add(found_image)
+                            ordered_images.append(found_image)
+            except Exception as e:
+                print(f"Warning: Error processing content file {content_path}: {e}")
+                pass
+        
+        return ordered_images
 
     def _analyze_image_with_pyvips(self, img_path):
         """Analyze image using pyvips for complexity and B&W detection."""
@@ -161,7 +238,7 @@ class ImageProcessor:
             print(f"Warning: Could not analyze image {img_path} with pyvips: {e}")
             return {'is_bw': False, 'complexity': 80, 'width': 1080, 'height': 1080}
 
-    def _process_single_image_pyvips(self, img_path, extract_dir, output_folder, epub_title=None, is_cover=False, image_index=0):
+    def _process_single_image_pyvips(self, img_path, extract_dir, epub_output_folder, central_images_folder, epub_title=None, is_cover=False, image_index=0, is_directory_mode=False):
         """Process a single image using pyvips and save as file."""
         try:
             import pyvips
@@ -200,19 +277,41 @@ class ImageProcessor:
                 print(f"Detected {complexity_level} complexity color image: {img_path.name}, using {quality}% compression")
             
             # Generate filename based on new naming scheme
-            if is_cover:
-                output_filename = "cover.avif"
-            elif epub_title:
+            # Generate filename based on new naming scheme
+            if epub_title:
                 # Create sanitized EPUB title for hash
                 sanitized_title = epub_title.lower().replace(' ', '').replace('-', '').replace('_', '')
                 # Remove common words and special characters
                 sanitized_title = ''.join(c for c in sanitized_title if c.isalnum())
                 
-                # Generate CRC32 hash
-                crc32_hash = format(zlib.crc32(sanitized_title.encode()) & 0xffffffff, 'X')
+                # Generate CRC64 hash
+                crc64_hash = format(crc64(sanitized_title.encode()), 'X')
                 
-                # Generate sequential filename
-                output_filename = f"{crc32_hash}-{image_index}.avif"
+                # Generate sequential filename using letters (A-Z, then AA-AZ, etc.)
+                # Convert image_index to base 26 with letters
+                letter_index = image_index - 1  # 0-based
+                if letter_index < 26:
+                    letter_suffix = chr(ord('A') + letter_index)
+                else:
+                    # For indices > 26, use multiple letters (AA, AB, AC, etc.)
+                    letter_suffix = ''
+                    n = letter_index
+                    while n >= 0:
+                        letter_suffix = chr(ord('A') + (n % 26)) + letter_suffix
+                        n = n // 26 - 1
+                
+                output_filename = f"{crc64_hash}{letter_suffix}.avif"
+                
+                # Determine where to save and the HTML path
+                if is_directory_mode and central_images_folder:
+                    # Save to central images folder in directory mode
+                    output_path = central_images_folder / output_filename
+                    # Use absolute path for directory mode
+                    html_path = f"/images/{output_filename}"
+                else:
+                    # Save to EPUB output folder in single-file mode
+                    output_path = epub_output_folder / output_filename
+                    html_path = f"/images/{output_filename}"
             else:
                 # Fallback to old naming scheme if epub_title is None
                 relative_original = unquote(str(img_path.relative_to(extract_dir).as_posix()))
@@ -220,8 +319,14 @@ class ImageProcessor:
                 original_name = img_path.stem
                 original_name = original_name.replace('/', '_').replace('\\', '_')
                 output_filename = f"{original_name}_{path_hash}.avif"
-            
-            output_path = output_folder / output_filename
+                
+                # Determine where to save and the HTML path
+                if is_directory_mode and central_images_folder:
+                    output_path = central_images_folder / output_filename
+                    html_path = f"/images/{output_filename}"
+                else:
+                    output_path = epub_output_folder / output_filename
+                    html_path = f"/images/{output_filename}"
             
             # Save AVIF file
             with open(output_path, 'wb') as f:
@@ -230,19 +335,20 @@ class ImageProcessor:
             # Get relative original path for mapping
             relative_original = unquote(str(img_path.relative_to(extract_dir).as_posix()))
             
-            # Return relative path for use in HTML (just the filename since it's in the same folder)
+            # Return relative path for use in HTML
             return {
                 'relative_original': relative_original,
                 'filename': unquote(img_path.name),
                 'output_filename': output_filename,
-                'output_path': output_path
+                'output_path': output_path,
+                'html_path': html_path
             }
 
         except Exception as e:
             print(f"Warning: Could not process image {img_path} with pyvips: {e}")
             return None
 
-    def process_images_and_get_mapping(self, image_files, extract_dir, output_folder, epub_title=None, cover_image_path=None):
+    def process_images_and_get_mapping(self, image_files, extract_dir, output_folder, epub_title=None, cover_image_path=None, central_images_folder=None, is_directory_mode=False):
         """Process images to AVIF using pyvips and save to disk."""
         path_mapping = {}
         
@@ -267,12 +373,22 @@ class ImageProcessor:
                         # Fallback: check if filenames match
                         is_cover = img_path.name.lower() == cover_image.name.lower()
                 
-                result = self._process_single_image_pyvips(img_path, extract_dir, output_folder, epub_title, is_cover, image_index)
+                result = self._process_single_image_pyvips(
+                    img_path, extract_dir, output_folder, central_images_folder or Path(), 
+                    epub_title, is_cover, image_index, is_directory_mode
+                )
                 if result:
-                    path_mapping[result['relative_original']] = result['output_filename']
-                    path_mapping[result['filename']] = result['output_filename']
-                    if not is_cover:
-                        image_index += 1
+                    # Add multiple path variations to the mapping for better lookup
+                    path_mapping[result['relative_original']] = result['html_path']
+                    path_mapping[result['filename']] = result['html_path']
+                    # Also add variations like ../Images/filename
+                    path_variation = result['relative_original']
+                    if '/' in path_variation:
+                        # Add parent directory variant
+                        path_mapping[f"../{path_variation}"] = result['html_path']
+                        path_mapping[f"{path_variation}"] = result['html_path']
+                        path_mapping[f"./{path_variation}"] = result['html_path']
+                    image_index += 1
         else:  # For larger numbers of images, use parallel processing
             print(f"  Processing {len(image_files)} images in parallel using {self.max_workers} workers (pyvips)...")
             
@@ -290,13 +406,16 @@ class ImageProcessor:
                         is_cover = img_path.name.lower() == cover_image.name.lower()
                 
                 image_tasks.append((img_path, is_cover, image_index))
-                if not is_cover:
-                    image_index += 1
+                image_index += 1
             
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # Submit all image processing tasks
                 future_to_task = {
-                    executor.submit(self._process_single_image_pyvips, task[0], extract_dir, output_folder, epub_title, task[1], task[2]): task
+                    executor.submit(
+                        self._process_single_image_pyvips, 
+                        task[0], extract_dir, output_folder, central_images_folder or Path(),
+                        epub_title, task[1], task[2], is_directory_mode
+                    ): task
                     for task in image_tasks
                 }
                 
@@ -307,8 +426,16 @@ class ImageProcessor:
                     try:
                         result = future.result()
                         if result:
-                            path_mapping[result['relative_original']] = result['output_filename']
-                            path_mapping[result['filename']] = result['output_filename']
+                            # Add multiple path variations to the mapping for better lookup
+                            path_mapping[result['relative_original']] = result['html_path']
+                            path_mapping[result['filename']] = result['html_path']
+                            # Also add variations like ../Images/filename
+                            path_variation = result['relative_original']
+                            if '/' in path_variation:
+                                # Add parent directory variant
+                                path_mapping[f"../{path_variation}"] = result['html_path']
+                                path_mapping[f"{path_variation}"] = result['html_path']
+                                path_mapping[f"./{path_variation}"] = result['html_path']
                     except Exception as e:
                         print(f"Error processing image {img_path}: {e}")
 

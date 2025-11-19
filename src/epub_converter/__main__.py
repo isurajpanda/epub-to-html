@@ -37,6 +37,10 @@ def main():
                        help='Maximum number of parallel workers for directory conversion (default: 100).')
     parser.add_argument('--no-script', action='store_true',
                        help='Generate HTML only without static JS and CSS files.')
+    parser.add_argument('--no-image', action='store_true',
+                       help='Skip image processing and only generate HTML and static files.')
+    parser.add_argument('--cover-only', action='store_true',
+                       help='Only generate cover.avif next to each EPUB and exit (no HTML changes).')
     args = parser.parse_args()
 
     # Detect Python version and threading capabilities
@@ -125,7 +129,7 @@ def main():
     
     print()
 
-    converter = EPUBConverter(args.epub_path, args.output_dir, args.css, no_script=args.no_script)
+    converter = EPUBConverter(args.epub_path, args.output_dir, args.css, no_script=args.no_script, no_image=args.no_image)
     converter.convert(max_workers=args.max_workers)
 
 if __name__ == "__main__":

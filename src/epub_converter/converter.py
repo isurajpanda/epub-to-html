@@ -8,7 +8,7 @@ import sys
 import cProfile
 import pstats
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 from jinja2 import Environment, FileSystemLoader
 
@@ -31,13 +31,17 @@ from .parser import EPUBParser
 from .image_processor import ImageProcessor
 
 class EPUBConverter:
-    def __init__(self, epub_path, output_folder=None, custom_css_path=None, no_script=False):
+    def __init__(self, epub_path, output_folder=None, custom_css_path=None, no_script=False, no_image=False):
         self.epub_path = Path(epub_path)
         self.output_folder = Path(output_folder) if output_folder else self.epub_path.parent
         self.custom_css_path = custom_css_path
         self.no_script = no_script
+        self.no_image = no_image
         self.temp_dir = None
         self.image_processor = ImageProcessor()
+        
+        # Central images folder for directory conversions
+        self.central_images_folder = None
         
         template_path = Path(__file__).parent / "templates"
         self.jinja_env = Environment(loader=FileSystemLoader(template_path))
@@ -144,6 +148,9 @@ class EPUBConverter:
         self.js_line_comment_pattern = re.compile(r'(?<!:)//.*?$', re.MULTILINE)
         self.js_block_comment_pattern = re.compile(r'/\*.*?\*/', re.DOTALL)
         self.js_whitespace_pattern = re.compile(r'\s+')
+        
+        # SVG pattern for detecting and replacing SVG elements containing images
+        self.svg_pattern = re.compile(r'<svg[^>]*>.*?</svg>', re.DOTALL | re.IGNORECASE)
 
     def _process_content_file(self, content_file_info, extract_dir, path_mapping, metadata=None):
         """Process a single content file and return the processed content."""
@@ -153,6 +160,58 @@ class EPUBConverter:
                 content = f.read()
             
             body_content = self.extract_body_content(content)
+            
+            # For the first page, replace any SVG elements with image references with the correct cover image
+            # This ensures that incorrect SVG cover images are replaced with the proper <img> tag
+            if i == 1:
+                # Compile href pattern once
+                href_pattern = re.compile(r'(href|xlink:href)\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+                
+                # Find the new cover image path from mapping
+                cover_img_src = "./cover.avif" # Fallback
+                if metadata and 'actual_cover_file_path' in metadata:
+                    actual_cover = metadata['actual_cover_file_path']
+                    if actual_cover:
+                        try:
+                            from pathlib import Path
+                            # Try to find the cover in path_mapping
+                            # We need to look up by relative path or filename
+                            # Since we don't have easy access to extract_dir here to calculate relative path exactly as in processor
+                            # We'll try to find it by filename in the mapping values or keys
+                            
+                            # Better approach: The path_mapping keys are relative paths.
+                            # We can try to match the filename.
+                            cover_path = Path(actual_cover)
+                            cover_name = cover_path.name
+                            
+                            # Look for the cover in the mapping
+                            for key, value in path_mapping.items():
+                                if Path(key).name == cover_name:
+                                    cover_img_src = value
+                                    break
+                        except Exception as e:
+                            print(f"    Warning: Error finding cover image in mapping: {e}")
+
+                def replace_svg_with_cover(match):
+                    svg_content = match.group(0)
+                    # Only replace SVGs that contain an <image> element with a non-data URL reference
+                    # This targets SVG cover images specifically
+                    if '<image' in svg_content.lower():
+                        # Check if there's an xlink:href or href with a non-data URL
+                        has_non_data_image = False
+                        matches = href_pattern.findall(svg_content)
+                        for attr_name, href_value in matches:
+                            if href_value and not href_value.startswith('data:'):
+                                has_non_data_image = True
+                                break
+                        
+                        if has_non_data_image:
+                            return f'<img alt="Cover" class="CoverImage" id="CoverImage" src="{cover_img_src}" loading="eager" fetchpriority="high" decoding="async">'
+                    
+                    # If no image element or it's a data URL, return the original SVG
+                    return svg_content
+                
+                body_content = self.svg_pattern.sub(replace_svg_with_cover, body_content)
 
             def replace_img_src_in_chapter(match):
                 tag_start = match.group(1)
@@ -163,22 +222,90 @@ class EPUBConverter:
                 if src.startswith('data:') or self.data_url_pattern.match(src):
                     return match.group(0)
 
+                # Check if this is the cover image - improved detection
+                is_cover = False
+                if metadata and 'actual_cover_file_path' in metadata:
+                    actual_cover = metadata['actual_cover_file_path']
+                    if actual_cover:
+                        try:
+                            from pathlib import Path
+                            cover_path = Path(actual_cover)
+                            cover_name = cover_path.name
+                            cover_stem = cover_path.stem
+                            
+                            # Multiple ways to match the cover image
+                            src_path = Path(src)
+                            src_name = src_path.name
+                            src_stem = src_path.stem
+                            
+                            # Check various matching criteria
+                            if (src.endswith(cover_name) or 
+                                src == cover_name or 
+                                cover_name in src or
+                                src_name == cover_name or
+                                src_stem == cover_stem or
+                                'cover' in src.lower() and 'cover' in cover_name.lower()):
+                                is_cover = True
+                        except Exception as e:
+                            print(f"    Warning: Error checking cover image match: {e}")
+
+                # Try multiple methods to find the image in the mapping
+                new_src = None
+                
+                # Method 1: Try with full path resolution
                 try:
                     content_dir = content_file_path.parent
                     abs_img_path = (content_dir / src).resolve()
-                    
                     relative_to_extract_dir = abs_img_path.relative_to(extract_dir).as_posix()
-                    
-                    new_src = path_mapping.get(relative_to_extract_dir, src)
+                    new_src = path_mapping.get(relative_to_extract_dir)
                 except Exception:
-                    new_src = path_mapping.get(Path(src).name, src)
+                    pass
+                
+                # Method 2: Try with the src as-is (for paths like ../Images/Cover.jpg)
+                if not new_src:
+                    new_src = path_mapping.get(src)
+                
+                # Method 3: Try with just the filename
+                if not new_src:
+                    new_src = path_mapping.get(Path(src).name)
+                
+                # Method 4: Try with normalized path (handle Windows/Unix differences)
+                if not new_src:
+                    normalized_src = src.replace('\\', '/').replace('..\\', '../').replace('..//', '../')
+                    new_src = path_mapping.get(normalized_src)
+                
+                # Method 5: Try with just the stem (filename without extension)
+                if not new_src:
+                    new_src = path_mapping.get(Path(src).stem)
+                
+                # Method 6: Try case-insensitive matching
+                if not new_src:
+                    src_lower = src.lower()
+                    for key, value in path_mapping.items():
+                        if key.lower() == src_lower:
+                            new_src = value
+                            break
+                
+                # Method 7: Try partial matching for complex paths
+                if not new_src:
+                    src_parts = Path(src).parts
+                    for key, value in path_mapping.items():
+                        key_parts = Path(key).parts
+                        if src_parts[-1] in key_parts:  # Last part matches
+                            new_src = value
+                            break
+                
+                # Use original src if still not found
+                if not new_src:
+                    print(f"    Warning: Could not find mapping for image: {src}, using original path")
+                    new_src = src
 
                 return f'{tag_start}{quote}{new_src}{quote}'
 
             def replace_img_tags(match):
                 """Replace image src while preserving all alt attributes and adding appropriate loading"""
                 full_img_tag = match.group(0)
-                
+                    
                 # Check if loading attribute already exists
                 has_loading = 'loading=' in full_img_tag.lower()
                 
@@ -196,34 +323,98 @@ class EPUBConverter:
                     if src_match:
                         image_path = src_match.group(1)
                         image_name = Path(image_path).stem
-                        # Insert alt attribute before the closing >
-                        replaced_tag = self.img_close_pattern.sub(r'\1alt="' + image_name + r'"\2', replaced_tag, count=1)
+                        # Insert alt attribute before the closing > or />
+                        # Use a more specific approach to avoid corrupting surrounding HTML
+                        if replaced_tag.endswith('/>'):
+                            replaced_tag = replaced_tag[:-2] + f' alt="{image_name}" decoding="async" />'
+                        elif replaced_tag.endswith('>'):
+                            replaced_tag = replaced_tag[:-1] + f' alt="{image_name}" decoding="async">'
                 
                 # Add appropriate loading attribute if not already present
                 if not has_loading:
-                    # Check if this is the cover image (first image in first chapter)
+                    # Check if this is the cover image
                     src_match = self.img_src_extract_pattern.search(replaced_tag)
                     if src_match:
                         image_path = src_match.group(1)
-                        # Check if this is the cover image by comparing with cover_image_url
-                        cover_image_url = metadata.get('cover_image_url')
-                        if cover_image_url and image_path == cover_image_url:
+                        is_cover_image = False
+                        
+                        # Check if it matches the actual cover file path
+                        if metadata and 'actual_cover_file_path' in metadata:
+                            actual_cover = metadata['actual_cover_file_path']
+                            if actual_cover:
+                                try:
+                                    from pathlib import Path
+                                    cover_path = Path(actual_cover)
+                                    cover_name = cover_path.name
+                                    cover_stem = cover_path.stem
+                                    
+                                    # We need to check if the *original* src matched the cover, 
+                                    # but here we have the *replaced* src (image_path).
+                                    # However, replace_img_src_in_chapter already did the lookup.
+                                    # A better way is to check if the image_path corresponds to the cover image in the mapping.
+                                    
+                                    # Let's try to find the cover image path in the mapping again
+                                    cover_mapped_path = None
+                                    for key, value in path_mapping.items():
+                                        if Path(key).name == cover_name:
+                                            cover_mapped_path = value
+                                            break
+                                    
+                                    if cover_mapped_path and (image_path == cover_mapped_path or image_path.endswith(cover_mapped_path)):
+                                        is_cover_image = True
+                                    
+                                    # Fallback: check if 'cover' is in the name
+                                    if not is_cover_image and ('cover' in image_path.lower() or 'cover' in cover_name.lower()):
+                                        # This is a bit loose, but might be needed
+                                        pass
+                                        
+                                except Exception as e:
+                                    print(f"    Warning: Error in cover image replacement: {e}")
+                        
+                        if is_cover_image:
                             # Cover image should be eager-loaded for LCP
-                            replaced_tag = replaced_tag.replace('>', ' loading="eager" fetchpriority="high">', 1)
+                            if replaced_tag.endswith('/>'):
+                                replaced_tag = replaced_tag[:-2] + ' loading="eager" fetchpriority="high" decoding="async" />'
+                            else:
+                                replaced_tag = replaced_tag[:-1] + ' loading="eager" fetchpriority="high" decoding="async">'
                         else:
                             # Other images should be lazy-loaded
-                            replaced_tag = replaced_tag.replace('>', ' loading="lazy">', 1)
+                            if replaced_tag.endswith('/>'):
+                                replaced_tag = replaced_tag[:-2] + ' loading="lazy" decoding="async" />'
+                            else:
+                                replaced_tag = replaced_tag[:-1] + ' loading="lazy" decoding="async">'
                     else:
                         # Fallback to lazy loading if we can't determine the image
-                        replaced_tag = replaced_tag.replace('>', ' loading="lazy">', 1)
+                        if replaced_tag.endswith('/>'):
+                            replaced_tag = replaced_tag[:-2] + ' loading="lazy" decoding="async" />'
+                        else:
+                            replaced_tag = replaced_tag[:-1] + ' loading="lazy" decoding="async">'
                 
                 return replaced_tag
 
+            # Always process images in content to fix paths (even if --no-image flag is set)
+            # This ensures the HTML has the correct image references whether images are converted or not
             body_content = self.img_tag_pattern.sub(replace_img_tags, body_content)
 
-            return f'''<div class="chapter" id="page{i:02d}">
+            result = f'''<div class="chapter" id="page{i:02d}">
 {body_content}
 </div>'''
+            
+            # DEBUG: Check for malformed spans
+            if '<span ' in result and 'xmlns=' not in result:
+                # Check if it's actually malformed (has <span  followed by text without >)
+                import re as debug_re
+                malformed = debug_re.findall(r'<span\s+[^<>]{10,50}', result)
+                if malformed:
+                    print(f"DEBUG WARNING: Page {i} has {len(malformed)} potentially malformed spans")
+                    print(f"Example: {malformed[0][:80]}")
+            
+            # Fix malformed spans where > is missing after <span
+            # This handles cases like <span Text... -> <span>Text...
+            # We look for <span followed by whitespace and then non-attribute text
+            result = re.sub(r'<span\s+(?![a-zA-Z0-9_:-]+=)([^>]+?)', r'<span>\1', result)
+            
+            return result
         except Exception as e:
             print(f"    Warning: Could not read {content_file_path.name}: {e}")
             return None
@@ -274,11 +465,21 @@ class EPUBConverter:
         return final_html
 
     def extract_body_content(self, content):
-        """Extract and clean body content from HTML/XHTML using fastest available parser."""
-        if HAS_SELECTOLAX:
-            return self._extract_body_content_selectolax(content)
-        else:
-            return self._extract_body_content_regex(content)
+        """Extract and clean body content from HTML/XHTML.
+        
+        Prioritizes Regex for robustness as selectolax can sometimes return empty/malformed 
+        content for certain XHTML structures (e.g. namespaced tags).
+        """
+        # Try Regex first as it is most robust for preserving inner HTML content
+        result = self._extract_body_content_regex(content)
+        
+        # If Regex returns empty but input is large, try Selectolax as fallback
+        # DISABLE SELECTOLAX FALLBACK: It strips xmlns attributes and causes malformed spans in some cases
+        # if (not result or len(result) < 10) and len(content) > 100 and HAS_SELECTOLAX:
+        #     print("    Info: Regex extraction empty, trying selectolax fallback...")
+        #     return self._extract_body_content_selectolax(content)
+            
+        return result
 
     def _extract_body_content_selectolax(self, content):
         """Extract body content using selectolax (fastest HTML parser)."""
@@ -286,7 +487,15 @@ class EPUBConverter:
             tree = HTMLParser(content)
             body_element = tree.css_first('body')
             if body_element:
-                return body_element.html
+                result = body_element.html
+                # Check if result is suspiciously empty (e.g. just <body></body>)
+                # If input content is large (>100 chars) but result is small (<30 chars),
+                # it's likely a parsing error or empty body. Fallback to regex to be safe.
+                if result and len(result) < 30 and len(content) > 100:
+                    # Check if it's really empty or just short content
+                    # Regex fallback is safer for these edge cases
+                    return self._extract_body_content_regex(content)
+                return result
             else:
                 # Fallback to html element
                 html_element = tree.css_first('html')
@@ -326,38 +535,45 @@ class EPUBConverter:
                 original_href = item['href']
                 
                 # Extract file path from href (remove any existing fragments)
-                file_path = original_href.split('#')[0]
-                
-                # Try to find matching chapter ID
-                chapter_id = None
-                
-                # Try exact match first
-                if file_path in content_id_mapping:
-                    chapter_id = content_id_mapping[file_path]
+                if '#' in original_href:
+                    file_path, fragment = original_href.split('#', 1)
                 else:
-                    # Try with just filename
-                    filename = Path(file_path).name
-                    if filename in content_id_mapping:
-                        chapter_id = content_id_mapping[filename]
-                    else:
-                        # Try with stem (filename without extension)
-                        stem = Path(file_path).stem
-                        if stem in content_id_mapping:
-                            chapter_id = content_id_mapping[stem]
-                
-                if chapter_id:
-                    # Update href to use the mapped chapter ID
+                    file_path = original_href
+                    fragment = None
+            
+            # Try to find matching chapter ID
+            chapter_id = None
+            
+            # Try exact match first
+            if file_path in content_id_mapping:
+                chapter_id = content_id_mapping[file_path]
+            else:
+                # Try with just filename
+                filename = Path(file_path).name
+                if filename in content_id_mapping:
+                    chapter_id = content_id_mapping[filename]
+                # Try with URL decoded path
+                elif unquote(file_path) in content_id_mapping:
+                    chapter_id = content_id_mapping[unquote(file_path)]
+            
+            # If still not found, try fuzzy matching
+            if not chapter_id:
+                chapter_id = self._find_closest_chapter_match(file_path, content_id_mapping)
+            
+            if chapter_id:
+                if fragment:
+                    # Use the fragment as the target ID to allow deep linking
+                    item['href'] = f"#{fragment}"
+                    # Note: This assumes the fragment ID is unique across the entire book.
+                    # If not, it might jump to the wrong chapter. But this is better than
+                    # always jumping to the top of the chapter for specific section links.
+                    print(f"    Mapped TOC with fragment: {item['label']} -> {item['href']}")
+                else:
                     item['href'] = f"#{chapter_id}"
                     print(f"    Mapped TOC: {item['label']} -> {item['href']}")
-                else:
-                    # Fallback: try to find closest match by filename similarity
-                    chapter_id = self._find_closest_chapter_match(file_path, content_id_mapping)
-                    if chapter_id:
-                        item['href'] = f"#{chapter_id}"
-                        print(f"    Fallback mapped TOC: {item['label']} -> {item['href']}")
-                    else:
-                        print(f"    Warning: Could not map TOC entry: {item['label']} ({original_href})")
-                        item['href'] = "#page01"  # Default to first page
+            else:
+                print(f"    Warning: Could not map TOC entry: {item['label']} ({original_href})")
+                item['href'] = "#page01"  # Default to first page
                 
                 # Process children recursively
                 if 'children' in item:
@@ -441,6 +657,107 @@ class EPUBConverter:
         html_content = self.link_href_pattern.sub(replace_a_href, html_content)
         return html_content
 
+    def _generate_expected_path_mapping(self, extract_dir, content_files, epub_output_folder, metadata=None):
+        """Generate image path mapping without processing images, mirroring ImageProcessor naming.
+        Ensures identical HTML paths in --no-image and normal modes.
+        """
+        from .image_processor import crc64  # reuse the exact hashing
+        path_mapping = {}
+
+        # Title-based hash, same sanitization as ImageProcessor
+        epub_title = (metadata or {}).get('title', 'Unknown') or 'Unknown'
+        sanitized = epub_title.lower().replace(' ', '').replace('-', '').replace('_', '')
+        sanitized = ''.join(c for c in sanitized if c.isalnum())
+        crc_hex = format(crc64(sanitized.encode()), 'X')
+
+        # Build ordered, de-duplicated list of referenced images (reading order)
+        ordered_images = []  # store tuples (relative_to_extract_dir, original_src, filename)
+        seen = set()
+
+        for _, content_path in content_files:
+            try:
+                with open(content_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                img_matches = self.img_src_extract_pattern.findall(content)
+                for img_src in img_matches:
+                    if img_src.startswith('data:') or self.data_url_pattern.match(img_src):
+                        continue
+                    try:
+                        abs_img_path = (content_path.parent / unquote(img_src)).resolve()
+                        rel = abs_img_path.relative_to(extract_dir).as_posix()
+                    except Exception:
+                        # Fallback: just use the src as-is
+                        rel = img_src
+                    if rel not in seen:
+                        seen.add(rel)
+                        ordered_images.append((rel, img_src, Path(img_src).name))
+            except Exception:
+                continue
+
+        # Determine cover image similar to normal path
+        cover_rel = None
+        # 1) From metadata
+        cover_meta = (metadata or {}).get('cover_image_path')
+        if cover_meta:
+            try:
+                abs_cover = (extract_dir / Path(cover_meta)).resolve()
+                cover_rel = abs_cover.relative_to(extract_dir).as_posix()
+            except Exception:
+                cover_rel = None
+        # 2) First actual image in the first content file
+        if not cover_rel and content_files:
+            try:
+                first_content_path = content_files[0][1]
+                with open(first_content_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    first_content = f.read()
+                first_imgs = self.img_src_extract_pattern.findall(first_content)
+                for img_src in first_imgs:
+                    if img_src.startswith('data:') or self.data_url_pattern.match(img_src):
+                        continue
+                    abs_img_path = (first_content_path.parent / unquote(img_src)).resolve()
+                    cover_rel = abs_img_path.relative_to(extract_dir).as_posix()
+                    break
+            except Exception:
+                pass
+
+        # Map images: cover -> ./cover.avif, others -> /images/{CRC64}{letter}.avif
+        letter_index = 1  # start at 1, skip increment when cover
+        def index_to_letters(idx):
+            n = idx - 1
+            if n < 26:
+                return chr(ord('A') + n)
+            letters = ''
+            while n >= 0:
+                letters = chr(ord('A') + (n % 26)) + letters
+                n = n // 26 - 1
+            return letters
+
+        for rel, original_src, filename in ordered_images:
+            if cover_rel and rel == cover_rel:
+                html_path = "./cover.avif"
+                # variations
+                path_mapping[rel] = html_path
+                path_mapping[filename] = html_path
+                path_mapping[original_src] = html_path
+                path_mapping[f"../{rel}"] = html_path
+                path_mapping[f"./{rel}"] = html_path
+                continue
+
+            suffix = index_to_letters(letter_index)
+            output_filename = f"{crc_hex}{suffix}.avif"
+            html_path = f"/images/{output_filename}"
+
+            path_mapping[rel] = html_path
+            path_mapping[filename] = html_path
+            path_mapping[original_src] = html_path
+            if '/' in rel:
+                path_mapping[f"../{rel}"] = html_path
+                path_mapping[f"{rel}"] = html_path
+                path_mapping[f"./{rel}"] = html_path
+            letter_index += 1
+
+        return path_mapping
+
     def convert_single_epub(self, epub_path):
         """Convert a single EPUB file"""
         print(f"Converting {epub_path.name}...")
@@ -464,53 +781,114 @@ class EPUBConverter:
 
             toc, metadata, filtered_hrefs = parser.find_and_parse_toc(opf_file, extract_dir)
             content_files = parser.find_content_files(opf_file, extract_dir, filtered_hrefs)
-            image_files = self.image_processor.find_images(extract_dir)
-
-            # Detect cover image before processing
-            actual_cover_file_path = None
-            if metadata.get('cover_image_path'):
-                potential_cover_abs_path = (extract_dir / Path(metadata['cover_image_path'])).resolve()
-                if potential_cover_abs_path.exists():
-                    actual_cover_file_path = potential_cover_abs_path
-
-            if not actual_cover_file_path and content_files:
-                first_content_file_path = content_files[0][1]
-                try:
-                    with open(first_content_file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        first_page_content = f.read()
-                    
-                    img_match = re.search(r'<img[^>]+src=["\']([^"\\]+)["\\]', first_page_content, re.IGNORECASE)
-                    if img_match:
-                        img_src = img_match.group(1)
-                        first_content_file_dir = first_content_file_path.parent
-                        abs_img_path = (first_content_file_dir / unquote(img_src)).resolve()
-                        
-                        if abs_img_path.exists() and abs_img_path.is_file():
-                            actual_cover_file_path = abs_img_path
-                except Exception as e:
-                    print(f"  Error reading first content file for cover image detection: {e}")
-
-            # Process images with EPUB title and cover image path
-            epub_title = metadata.get('title', 'Unknown')
-            path_mapping = self.image_processor.process_images_and_get_mapping(
-                image_files, extract_dir, epub_output_folder, epub_title, actual_cover_file_path
-            )
-
-            cover_image_url = None
-            if actual_cover_file_path:
-                try:
-                    relative_to_extract_dir_path = actual_cover_file_path.relative_to(extract_dir).as_posix()
-                    cover_image_url = path_mapping.get(relative_to_extract_dir_path)
-                    if not cover_image_url:
-                        cover_image_url = path_mapping.get(actual_cover_file_path.name)
-                    # If still not found, use the new naming scheme (cover.avif)
-                    if not cover_image_url:
-                        cover_image_url = "cover.avif"
-                except ValueError:
-                    cover_image_url = "cover.avif"
             
-            metadata['cover_image_url'] = cover_image_url
+            # Skip image processing if --no-image flag is set
+            if self.no_image:
+                print(f"  Skipping image processing (--no-image mode)")
+                # Generate expected path mapping without processing images
+                path_mapping = self._generate_expected_path_mapping(extract_dir, content_files, epub_output_folder, metadata)
+                # Still set cover_image_url for the template, even though the file won't exist
+                metadata['cover_image_url'] = "./cover.avif"
+                metadata['actual_cover_file_path'] = None
+            else:
+                all_image_files = self.image_processor.find_images(extract_dir)
+                # Filter images to only those from content files
+                image_files = self.image_processor.filter_images_by_content(all_image_files, content_files)
+
+                # Detect cover image before processing
+                actual_cover_file_path = None
+                
+                # Method 1: Try metadata cover_image_path first
+                if metadata.get('cover_image_path'):
+                    potential_cover_abs_path = (extract_dir / Path(metadata['cover_image_path'])).resolve()
+                    if potential_cover_abs_path.exists():
+                        actual_cover_file_path = potential_cover_abs_path
+                        print(f"  Found cover image from metadata: {actual_cover_file_path.name}")
+
+                # Method 2: If no metadata cover, find first image in first content file
+                if not actual_cover_file_path and content_files:
+                    first_content_file_path = content_files[0][1]
+                    try:
+                        with open(first_content_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            first_page_content = f.read()
+                        
+                        # Find all images in the first content file
+                        img_matches = re.findall(r'<img[^>]+src=["\']([^"\\]+)["\\]', first_page_content, re.IGNORECASE)
+                        for img_src in img_matches:
+                            if img_src.startswith('data:'):
+                                continue
+                            first_content_file_dir = first_content_file_path.parent
+                            try:
+                                abs_img_path = (first_content_file_dir / unquote(img_src)).resolve()
+                                if abs_img_path.exists() and abs_img_path.is_file():
+                                    actual_cover_file_path = abs_img_path
+                                    print(f"  Found cover image from first content file: {actual_cover_file_path.name}")
+                                    break
+                            except Exception:
+                                continue
+                    except Exception as e:
+                        print(f"  Error reading first content file for cover image detection: {e}")
+
+                # Method 3: If still no cover found, use the first image from all images
+                if not actual_cover_file_path and all_image_files:
+                    # Sort images by path to ensure consistent ordering
+                    sorted_images = sorted(all_image_files)
+                    actual_cover_file_path = sorted_images[0]
+                    print(f"  Using first available image as cover: {actual_cover_file_path.name}")
+
+                # Process images with EPUB title and cover image path
+                epub_title = metadata.get('title', 'Unknown')
+                
+                # Determine where to save images (central folder for directory mode, local images folder for single file)
+                if self.central_images_folder:
+                    images_output_folder = self.central_images_folder
+                    is_directory_mode = True
+                else:
+                    # Create local images folder for single file mode
+                    images_output_folder = epub_output_folder / "images"
+                    images_output_folder.mkdir(exist_ok=True)
+                    is_directory_mode = False
+                
+                path_mapping = self.image_processor.process_images_and_get_mapping(
+                    image_files, extract_dir, epub_output_folder, epub_title, actual_cover_file_path,
+                    central_images_folder=images_output_folder, is_directory_mode=is_directory_mode
+                )
+
+                # Determine cover image URL from mapping
+                cover_image_url = "./cover.avif" # Default fallback
+                if actual_cover_file_path:
+                    try:
+                        # Try to find the cover in the path mapping
+                        # We need the relative path from extract_dir
+                        rel_cover_path = actual_cover_file_path.relative_to(extract_dir).as_posix()
+                        if rel_cover_path in path_mapping:
+                            cover_image_url = path_mapping[rel_cover_path]
+                        else:
+                            # Try filename match
+                            cover_name = actual_cover_file_path.name
+                            if cover_name in path_mapping:
+                                cover_image_url = path_mapping[cover_name]
+                    except Exception as e:
+                        print(f"  Warning: Error mapping cover image URL: {e}")
+                
+                metadata['cover_image_url'] = cover_image_url
+                # Store the actual cover file path as a string to pass to image processing
+                if actual_cover_file_path:
+                    metadata['actual_cover_file_path'] = str(actual_cover_file_path)
             metadata['epub_filename'] = epub_path.name
+            # Also provide the base filename (without extension) and a URL-safe variant for template use
+            try:
+                epub_base = epub_path.stem.strip()
+            except Exception:
+                epub_base = str(epub_path).rsplit('.', 1)[0].strip()
+            metadata['epub_filename_base'] = epub_base
+            metadata['epub_filename_base_url'] = quote(epub_base, safe='')
+            # CDN covers translate apostrophes to underscores; handle both straight and curly apostrophes
+            try:
+                cdn_base = epub_base.replace("'", "_").replace("’", "_")
+            except Exception:
+                cdn_base = epub_base
+            metadata['epub_filename_cdn_base_url'] = quote(cdn_base, safe='')
 
             if not toc:
                 toc = parser.generate_basic_toc(content_files, extract_dir)
@@ -550,16 +928,20 @@ class EPUBConverter:
             with open(output_html, 'w', encoding='utf-8') as f:
                 f.write(final_html)
 
-            # Handle static files based on --no-script flag
-            static_folder = Path(__file__).parent / "static"
-            output_static_folder = epub_output_folder / "static"
-            
-            # Remove existing static folder if it exists (clean up from previous runs)
-            if output_static_folder.exists():
-                shutil.rmtree(output_static_folder)
-            
-            # Copy static files unless --no-script flag is set
-            if not self.no_script:
+            # Handle static files based on --no-script flag and mode
+            # Only create static folder if not in directory mode (where it's created at root)
+            if hasattr(self, 'central_static_folder') and self.central_static_folder:
+                # Directory mode: static files are at root, no need to copy
+                print(f"  Using root-level static files at {self.central_static_folder}/")
+            elif not self.no_script:
+                # Single file mode: create local static folder
+                static_folder = Path(__file__).parent / "static"
+                output_static_folder = epub_output_folder / "static"
+                
+                # Remove existing static folder if it exists (clean up from previous runs)
+                if output_static_folder.exists():
+                    shutil.rmtree(output_static_folder)
+                
                 output_static_folder.mkdir(exist_ok=True)
                 
                 # Copy and minify CSS file
@@ -611,6 +993,43 @@ class EPUBConverter:
                     for epub_dir in sorted(epub_dirs):
                         count = sum(1 for epub in epub_files if epub.parent == epub_dir)
                         print(f"    {epub_dir}: {count} EPUB(s)")
+                
+                # Create central images folder for directory conversions
+                if not self.no_image:
+                    self.central_images_folder = self.epub_path / "images"
+                    self.central_images_folder.mkdir(exist_ok=True)
+                    print(f"  Using central images folder: {self.central_images_folder}/")
+                
+                # Create central static folder for directory conversions
+                if not self.no_script:
+                    self.central_static_folder = self.epub_path / "static"
+                    self.central_static_folder.mkdir(exist_ok=True)
+                    
+                    # Copy static files only once at the root level
+                    static_folder = Path(__file__).parent / "static"
+                    
+                    # Copy and minify CSS file (always overwrite to ensure freshness)
+                    css_source = static_folder / "css" / "style.css"
+                    css_dest = self.central_static_folder / "style.css"
+                    if css_source.exists():
+                        with open(css_source, 'r', encoding='utf-8') as f:
+                            css_content = f.read()
+                        minified_css = self._minify_css(css_content)
+                        with open(css_dest, 'w', encoding='utf-8') as f:
+                            f.write(minified_css)
+                        print(f"  Wrote root static CSS: {css_dest} ({len(css_content)} -> {len(minified_css)} chars)")
+                    
+                    # Copy and minify JS file (always overwrite to ensure freshness)
+                    js_source = static_folder / "js" / "script.js"
+                    js_dest = self.central_static_folder / "script.js"
+                    if js_source.exists():
+                        with open(js_source, 'r', encoding='utf-8') as f:
+                            js_content = f.read()
+                        minified_js = self._minify_js(js_content)
+                        with open(js_dest, 'w', encoding='utf-8') as f:
+                            f.write(minified_js)
+                        print(f"  Wrote root static JS: {js_dest} ({len(js_content)} -> {len(minified_js)} chars)")
+                    print(f"  Using central static folder: {self.central_static_folder}/")
                 
                 # Use parallel processing for multiple EPUB files
                 if len(epub_files) > 1:
