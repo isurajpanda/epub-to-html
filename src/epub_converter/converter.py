@@ -728,8 +728,12 @@ class EPUBConverter:
             except Exception:
                 pass
 
-        # Map images: cover -> ./cover.avif, others -> /images/{CRC64}{letter}.avif
-        letter_index = 1  # start at 1, skip increment when cover
+        # Map images: cover -> {CRC64}{letter}.avif (same as others), others -> {CRC64}{letter}.avif
+        # IMPORTANT: Normal mode (ImageProcessor) does NOT special-case the cover filename.
+        # It uses the same hashing scheme for all images.
+        # We must match that behavior here.
+        
+        letter_index = 1  # start at 1
         def index_to_letters(idx):
             n = idx - 1
             if n < 26:
@@ -741,19 +745,18 @@ class EPUBConverter:
             return letters
 
         for rel, original_src, filename in ordered_images:
+            # Determine if this is the cover image
+            is_cover = False
             if cover_rel and rel == cover_rel:
-                html_path = "./cover.avif"
-                # variations
-                path_mapping[rel] = html_path
-                path_mapping[filename] = html_path
-                path_mapping[original_src] = html_path
-                path_mapping[f"../{rel}"] = html_path
-                path_mapping[f"./{rel}"] = html_path
-                continue
+                is_cover = True
 
             suffix = index_to_letters(letter_index)
             output_filename = f"{crc_hex}{suffix}.avif"
             html_path = f"/images/{output_filename}"
+            
+            # If it's cover, store the filename for metadata update
+            if is_cover:
+                self._detected_cover_filename = output_filename
 
             path_mapping[rel] = html_path
             path_mapping[filename] = html_path
@@ -762,6 +765,7 @@ class EPUBConverter:
                 path_mapping[f"../{rel}"] = html_path
                 path_mapping[f"{rel}"] = html_path
                 path_mapping[f"./{rel}"] = html_path
+            
             letter_index += 1
 
         return path_mapping
@@ -794,9 +798,18 @@ class EPUBConverter:
             if self.no_image:
                 print(f"  Skipping image processing (--no-image mode)")
                 # Generate expected path mapping without processing images
+                self._detected_cover_filename = None # Reset
                 path_mapping = self._generate_expected_path_mapping(extract_dir, content_files, epub_output_folder, metadata)
-                # Still set cover_image_url for the template, even though the file won't exist
-                metadata['cover_image_url'] = "./cover.avif"
+                
+                # Set cover_image_url to the detected cover filename or default
+                # In normal mode, the cover is also hashed (e.g. HASH_A.avif).
+                # We want to match that.
+                
+                if getattr(self, '_detected_cover_filename', None):
+                     metadata['cover_image_url'] = f"/images/{self._detected_cover_filename}"
+                else:
+                     metadata['cover_image_url'] = "" # No cover found
+
                 metadata['actual_cover_file_path'] = None
             else:
                 all_image_files = self.image_processor.find_images(extract_dir)

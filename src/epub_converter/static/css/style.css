@@ -58,6 +58,10 @@ body {
     will-change: transform;
     box-shadow: 5px 0 15px rgba(0, 0, 0, 0.5);
     /* Ensure no edge is visible when closed */
+    background-color: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
 }
 
@@ -795,7 +799,7 @@ img {
 
 /* Invisible overlay to block content interaction when TOC is open (Mobile Only) */
 @media (max-width: 768px) {
-    .toc-overlay {
+    .sidebar-overlay {
         position: fixed;
         top: 0;
         left: 0;
@@ -809,7 +813,7 @@ img {
         /* Don't block clicks by default */
     }
 
-    .toc-overlay.active {
+    .sidebar-overlay.active {
         display: block;
         pointer-events: auto;
         /* Block all clicks when active */
@@ -818,8 +822,426 @@ img {
 
 /* Hide overlay on desktop */
 @media (min-width: 769px) {
-    .toc-overlay {
+    .sidebar-overlay {
         display: none !important;
         pointer-events: none !important;
+    }
+}
+
+/* --- Settings Panel Styles --- */
+
+#settings-sidebar-container {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: auto;
+    width: var(--sidebar-width);
+    height: 100%;
+    z-index: 1200;
+    transform: translateX(calc(100% + 2px));
+    transition: transform 0.26s cubic-bezier(.2, .9, .2, 1);
+    will-change: transform;
+    box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    background-color: var(--sidebar-bg);
+    border-left: 1px solid var(--sidebar-border);
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+}
+
+#settings-sidebar-container::-webkit-scrollbar {
+    display: none;
+}
+
+#app-container.settings-open #settings-sidebar-container {
+    transform: translateX(0);
+}
+
+/* Shift content and top-right controls when settings open (Desktop) */
+@media (min-width: 768px) {
+    #app-container.settings-open #main-content {
+        transform: translateX(calc(var(--sidebar-width) * -0.5));
+    }
+
+    #app-container.settings-open .content-body {
+        max-width: min(var(--content-max), calc(100vw - var(--sidebar-width) - 4rem));
+        transition: max-width 220ms cubic-bezier(.2, .9, .2, 1);
+    }
+
+    #app-container.settings-open .top-right-controls {
+        transform: translateX(calc(var(--sidebar-width) * -1));
+    }
+}
+
+.top-right-controls {
+    transition: transform 0.26s cubic-bezier(.2, .9, .2, 1);
+    will-change: transform;
+}
+
+.settings-sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    color: var(--sidebar-text);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    border-bottom: 1px solid var(--sidebar-border);
+    background-color: var(--sidebar-bg);
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+#settings-close {
+    background: none;
+    border: none;
+    color: var(--sidebar-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    line-height: 1;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+#settings-close:hover {
+    background-color: var(--sidebar-hover-bg);
+    color: var(--text-color);
+}
+
+.settings-content {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE and Edge */
+}
+
+.settings-content::-webkit-scrollbar {
+    display: none;
+}
+
+.settings-section {
+    margin-bottom: 2rem;
+}
+
+.settings-section h3 {
+    margin: 0 0 1rem 0;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sidebar-text);
+    opacity: 0.9;
+    font-weight: 600;
+}
+
+/* Font Size Control */
+.font-size-control {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.font-size-preview {
+    padding: 1rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    /* Add checkerboard pattern */
+    background-image:
+        linear-gradient(45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.1) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.1) 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid var(--sidebar-border);
+    transition: font-size 0.2s;
+    min-height: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: var(--sidebar-text);
+    font-weight: 500;
+}
+
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.size-label {
+    font-weight: bold;
+    color: var(--sidebar-text);
+}
+
+.size-label.small {
+    font-size: 0.8rem;
+}
+
+.size-label.large {
+    font-size: 1.2rem;
+}
+
+#font-size-slider {
+    flex-grow: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--sidebar-border);
+    border-radius: 2px;
+    outline: none;
+}
+
+#font-size-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+#font-size-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* Font Family Grid */
+.font-family-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.5rem;
+}
+
+.font-option {
+    padding: 0.75rem;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--sidebar-border);
+    border-radius: 6px;
+    color: var(--sidebar-text);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.font-option:hover {
+    background-color: var(--sidebar-hover-bg);
+    border-color: var(--sidebar-text);
+    transform: translateY(-1px);
+}
+
+.font-option.active {
+    background-color: var(--link-color);
+    color: #ffffff;
+    border-color: var(--link-color);
+    font-weight: bold;
+}
+
+/* Theme Header & Toggle */
+.theme-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.theme-header h3 {
+    margin: 0;
+}
+
+.mode-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mode-label {
+    font-size: 0.85rem;
+    color: var(--text-color);
+    opacity: 0.8;
+}
+
+/* Pill-shaped Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 28px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+input:checked+.slider {
+    background-color: var(--link-color);
+}
+
+input:checked+.slider:before {
+    transform: translateX(22px);
+}
+
+/* Theme Grid */
+.theme-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+}
+
+.theme-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--sidebar-text);
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.theme-option:hover {
+    background-color: var(--sidebar-hover-bg);
+    border-color: var(--sidebar-border);
+    transform: translateY(-1px);
+}
+
+.theme-option.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-color: var(--link-color);
+    font-weight: bold;
+}
+
+/* Theme Previews - Dynamic based on body class */
+.theme-preview {
+    width: 100%;
+    height: 40px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border: 1px solid transparent;
+    transition: background-color 0.3s ease;
+}
+
+/* Classic */
+body.light-mode .theme-preview.classic {
+    background-color: #f4f6f8;
+    border-color: #e5e7eb;
+}
+
+body.dark-mode .theme-preview.classic {
+    background-color: #000000;
+    border-color: #333333;
+}
+
+/* Vintage */
+body.light-mode .theme-preview.vintage {
+    background-color: #f5e6d3;
+}
+
+body.dark-mode .theme-preview.vintage {
+    background-color: #2b2b00;
+}
+
+/* Lipstick (formerly Pink) */
+body.light-mode .theme-preview.lipstick {
+    background-color: #ffc0cb;
+}
+
+/* More vibrant pink */
+body.dark-mode .theme-preview.lipstick {
+    background-color: #2a0a18;
+}
+
+/* Ocean (formerly Blue) */
+body.light-mode .theme-preview.ocean {
+    background-color: #87ceeb;
+}
+
+/* More vibrant blue */
+body.dark-mode .theme-preview.ocean {
+    background-color: #001e3c;
+}
+
+/* Cyber */
+body.light-mode .theme-preview.cyber {
+    background-color: #e0b0ff;
+    border-color: #d8b4fe;
+}
+
+/* Vibrant purple */
+body.dark-mode .theme-preview.cyber {
+    background-color: #0a001e;
+}
+
+/* Nature */
+body.light-mode .theme-preview.nature {
+    background-color: #90ee90;
+}
+
+/* Vibrant green */
+body.dark-mode .theme-preview.nature {
+    background-color: #143214;
+}
+
+/* Mobile Adjustments for Settings */
+@media (max-width: 768px) {
+    #settings-sidebar-container {
+        /* Allow default width (320px) to apply, leaving space on the side */
+        transform: translateX(100%);
+        box-shadow: -5px 0 15px rgba(0, 0, 0, 0.5);
+        /* Ensure shadow is visible */
+    }
+
+    #app-container.settings-open #settings-sidebar-container {
+        transform: translateX(0);
     }
 }

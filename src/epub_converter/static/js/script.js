@@ -49,38 +49,399 @@ function buildTocList(items, onTocClick) {
 // --- START: Application Logic ---
 
 // Define handlers that work immediately
-const toggleSidebar = () => {
+// Define handlers that work immediately
+const togglePanel = (panelType) => {
     const appContainer = document.getElementById('app-container');
-    const tocOverlay = document.getElementById('toc-overlay');
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
 
-    if (appContainer) {
-        const isOpen = appContainer.classList.toggle('sidebar-open');
+    if (!appContainer) return;
 
-        // Toggle overlay shield (mobile only)
-        if (tocOverlay && window.innerWidth < 768) {
-            if (isOpen) {
-                tocOverlay.classList.add('active');
+    const isSidebar = panelType === 'sidebar';
+    const isSettings = panelType === 'settings';
+
+    const targetClass = isSidebar ? 'sidebar-open' : 'settings-open';
+    const otherClass = isSidebar ? 'settings-open' : 'sidebar-open';
+
+    // Close the other panel if it's open (mutual exclusivity)
+    if (appContainer.classList.contains(otherClass)) {
+        appContainer.classList.remove(otherClass);
+    }
+
+    // Toggle the target panel
+    const isOpening = !appContainer.classList.contains(targetClass);
+    appContainer.classList.toggle(targetClass);
+
+    // Handle overlay for mobile
+    if (window.innerWidth <= 768) {
+        if (sidebarOverlay) {
+            if (isOpening) {
+                sidebarOverlay.classList.add('active');
             } else {
-                tocOverlay.classList.remove('active');
+                // Only remove overlay if no panels are open
+                if (!appContainer.classList.contains('sidebar-open') &&
+                    !appContainer.classList.contains('settings-open')) {
+                    sidebarOverlay.classList.remove('active');
+                }
             }
         }
     }
 };
 
+const toggleSidebar = () => togglePanel('sidebar');
+const toggleSettings = () => togglePanel('settings');
 
-const toggleFontSize = () => {
+
+// Settings Logic
+const updateFontSize = (size) => {
     const contentBody = document.querySelector('.content-body');
-    if (!contentBody) return;
+    const slider = document.getElementById('font-size-slider');
+    if (!contentBody || !slider) return;
 
+    // Size mapping: 1=xs, 2=base, 3=lg, 4=xl, 5=2xl
     const sizeClasses = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
-    const currentClass = sizeClasses.find(cls => contentBody.classList.contains(cls)) || 'text-base';
-    const currentIndex = sizeClasses.indexOf(currentClass);
-    const nextIndex = (currentIndex + 1) % sizeClasses.length;
+    const sizeIndex = parseInt(size) - 1;
 
     // Remove all size classes
     sizeClasses.forEach(cls => contentBody.classList.remove(cls));
-    // Add the new size class
-    contentBody.classList.add(sizeClasses[nextIndex]);
+
+    // Add new size class
+    if (sizeIndex >= 0 && sizeIndex < sizeClasses.length) {
+        contentBody.classList.add(sizeClasses[sizeIndex]);
+    }
+
+    // Update slider value if needed (e.g. on load)
+    if (slider.value !== size) slider.value = size;
+
+    // Update preview text size
+    const preview = document.getElementById('font-size-preview');
+    if (preview) {
+        // Remove existing size classes from preview
+        sizeClasses.forEach(cls => preview.classList.remove(cls));
+        // Add new size class
+        if (sizeIndex >= 0 && sizeIndex < sizeClasses.length) {
+            preview.classList.add(sizeClasses[sizeIndex]);
+        }
+    }
+
+    // Save to localStorage
+    localStorage.setItem('reader-font-size', size);
+};
+
+const updateFontFamily = (font) => {
+    const contentBody = document.querySelector('.content-body');
+    const fontSizePreview = document.getElementById('font-size-preview');
+
+    if (!contentBody) return;
+
+    let fontFamily = '';
+    if (font === 'original') {
+        fontFamily = '';
+    } else if (font === 'georgia') {
+        fontFamily = 'Georgia, serif';
+    } else if (font === 'comic-sans') {
+        fontFamily = "'Comic Sans MS', cursive";
+    } else {
+        fontFamily = font;
+    }
+
+    contentBody.style.fontFamily = fontFamily;
+
+    // Also apply to preview
+    if (fontSizePreview) {
+        fontSizePreview.style.fontFamily = fontFamily;
+    }
+
+    // Update active state in UI
+    document.querySelectorAll('.font-option').forEach(btn => {
+        if (btn.dataset.font === font) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
+
+    // Save to localStorage
+    localStorage.setItem('reader-font-family', font);
+};
+
+let currentThemeFamily = 'classic';
+let currentThemeMode = 'dark'; // Default to dark mode
+
+const themes = {
+    classic: {
+        light: {
+            '--bg-color': '#f4f6f8',
+            '--text-color': '#1f2937',
+            '--sidebar-bg': '#f4f6f8',
+            '--sidebar-border': '#e5e7eb',
+            '--sidebar-text': '#1f2937',
+            '--sidebar-hover-bg': '#e5e7eb',
+            '--topbar-bg': '#f4f6f8',
+            '--topbar-button-hover': '#e5e7eb',
+            '--separator-color': '#e5e7eb',
+            '--link-color': '#2563eb',
+            '--link-visited': '#1d4ed8'
+        },
+        dark: {
+            '--bg-color': '#000000',
+            '--text-color': '#ffffff',
+            '--sidebar-bg': '#000000',
+            '--sidebar-border': '#333333',
+            '--sidebar-text': '#ffffff',
+            '--sidebar-hover-bg': '#1a1a1a',
+            '--topbar-bg': '#000000',
+            '--topbar-button-hover': '#1a1a1a',
+            '--separator-color': '#333333',
+            '--link-color': '#60a5fa',
+            '--link-visited': '#3b82f6'
+        }
+    },
+    vintage: {
+        light: { // Sepia - More vibrant
+            '--bg-color': '#f5e6d3',
+            '--text-color': '#5c4033',
+            '--sidebar-bg': '#f5e6d3',
+            '--sidebar-border': '#e6d2b5',
+            '--sidebar-text': '#5c4033',
+            '--sidebar-hover-bg': '#e6d2b5',
+            '--topbar-bg': '#f5e6d3',
+            '--topbar-button-hover': '#e6d2b5',
+            '--separator-color': '#e6d2b5',
+            '--link-color': '#a0522d',
+            '--link-visited': '#8b4513'
+        },
+        dark: { // Yellow Dark
+            '--bg-color': '#2b2b00',
+            '--text-color': '#ffffcc',
+            '--sidebar-bg': '#3d3d00',
+            '--sidebar-border': '#5c5c00',
+            '--sidebar-text': '#ffffcc',
+            '--sidebar-hover-bg': '#5c5c00',
+            '--topbar-bg': '#3d3d00',
+            '--topbar-button-hover': '#5c5c00',
+            '--separator-color': '#5c5c00',
+            '--link-color': '#ffff66',
+            '--link-visited': '#cccc00'
+        }
+    },
+    lipstick: {
+        light: { // Pink - Vibrant
+            '--bg-color': '#ffc0cb',
+            '--text-color': '#880e4f',
+            '--sidebar-bg': '#ffc0cb',
+            '--sidebar-border': '#ff69b4',
+            '--sidebar-text': '#880e4f',
+            '--sidebar-hover-bg': '#ff69b4',
+            '--topbar-bg': '#ffc0cb',
+            '--topbar-button-hover': '#ff69b4',
+            '--separator-color': '#ff69b4',
+            '--link-color': '#c2185b',
+            '--link-visited': '#880e4f'
+        },
+        dark: { // Pink
+            '--bg-color': '#2a0a18',
+            '--text-color': '#ffd1ea',
+            '--sidebar-bg': '#3d0f23',
+            '--sidebar-border': '#5c1635',
+            '--sidebar-text': '#ffd1ea',
+            '--sidebar-hover-bg': '#5c1635',
+            '--topbar-bg': '#3d0f23',
+            '--topbar-button-hover': '#5c1635',
+            '--separator-color': '#5c1635',
+            '--link-color': '#ff6b9d',
+            '--link-visited': '#ff4d88'
+        }
+    },
+    ocean: {
+        light: { // Blue - Vibrant
+            '--bg-color': '#87ceeb',
+            '--text-color': '#0d47a1',
+            '--sidebar-bg': '#87ceeb',
+            '--sidebar-border': '#4fc3f7',
+            '--sidebar-text': '#0d47a1',
+            '--sidebar-hover-bg': '#4fc3f7',
+            '--topbar-bg': '#87ceeb',
+            '--topbar-button-hover': '#4fc3f7',
+            '--separator-color': '#4fc3f7',
+            '--link-color': '#1565c0',
+            '--link-visited': '#0d47a1'
+        },
+        dark: { // Ocean
+            '--bg-color': '#001e3c',
+            '--text-color': '#b4dcff',
+            '--sidebar-bg': '#002850',
+            '--sidebar-border': '#004080',
+            '--sidebar-text': '#b4dcff',
+            '--sidebar-hover-bg': '#004080',
+            '--topbar-bg': '#002850',
+            '--topbar-button-hover': '#004080',
+            '--separator-color': '#004080',
+            '--link-color': '#38bdf8',
+            '--link-visited': '#0ea5e9'
+        }
+    },
+    cyber: {
+        light: { // White with Neon Purple text - More vibrant bg
+            '--bg-color': '#f9f0ff',
+            '--text-color': '#4b0082',
+            '--sidebar-bg': '#f9f0ff',
+            '--sidebar-border': '#d8bfd8',
+            '--sidebar-text': '#4b0082',
+            '--sidebar-hover-bg': '#d8bfd8',
+            '--topbar-bg': '#f9f0ff',
+            '--topbar-button-hover': '#d8bfd8',
+            '--separator-color': '#d8bfd8',
+            '--link-color': '#9400d3',
+            '--link-visited': '#8a2be2'
+        },
+        dark: { // Neon
+            '--bg-color': '#0a001e',
+            '--text-color': '#ffffff',
+            '--sidebar-bg': '#140028',
+            '--sidebar-border': '#2a0050',
+            '--sidebar-text': '#ffffff',
+            '--sidebar-hover-bg': '#2a0050',
+            '--topbar-bg': '#140028',
+            '--topbar-button-hover': '#2a0050',
+            '--separator-color': '#2a0050',
+            '--link-color': '#ff00ff',
+            '--link-visited': '#d500d5'
+        }
+    },
+    nature: {
+        light: { // Pale Green - More vibrant
+            '--bg-color': '#f0fff4',
+            '--text-color': '#006400',
+            '--sidebar-bg': '#f0fff4',
+            '--sidebar-border': '#98fb98',
+            '--sidebar-text': '#006400',
+            '--sidebar-hover-bg': '#98fb98',
+            '--topbar-bg': '#f0fff4',
+            '--topbar-button-hover': '#98fb98',
+            '--separator-color': '#98fb98',
+            '--link-color': '#32cd32',
+            '--link-visited': '#228b22'
+        },
+        dark: { // Forest
+            '--bg-color': '#143214',
+            '--text-color': '#c8e6b4',
+            '--sidebar-bg': '#1e461e',
+            '--sidebar-border': '#2d692d',
+            '--sidebar-text': '#c8e6b4',
+            '--sidebar-hover-bg': '#2d692d',
+            '--topbar-bg': '#1e461e',
+            '--topbar-button-hover': '#2d692d',
+            '--separator-color': '#2d692d',
+            '--link-color': '#4ade80',
+            '--link-visited': '#22c55e'
+        }
+    }
+};
+
+const updateTheme = () => {
+    const root = document.documentElement;
+    const selectedTheme = themes[currentThemeFamily]?.[currentThemeMode];
+
+    if (selectedTheme) {
+        Object.entries(selectedTheme).forEach(([property, value]) => {
+            root.style.setProperty(property, value);
+        });
+    }
+
+    // Update active state for theme family buttons
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === currentThemeFamily);
+    });
+
+    // Update mode toggle state
+    const modeToggle = document.getElementById('theme-mode-toggle');
+    if (modeToggle) {
+        modeToggle.checked = currentThemeMode === 'dark';
+    }
+
+    // Update body class for preview styling
+    document.body.classList.remove('light-mode', 'dark-mode');
+    document.body.classList.add(`${currentThemeMode}-mode`);
+
+    // Save to localStorage
+    localStorage.setItem('reader-theme-family', currentThemeFamily);
+    localStorage.setItem('reader-theme-mode', currentThemeMode);
+};
+
+const initSettings = () => {
+    // Font size control - use pixel values directly from slider
+    const fontSizeSlider = document.getElementById('font-size-slider');
+    const fontSizePreview = document.getElementById('font-size-preview');
+    const contentBody = document.querySelector('.content-body');
+
+    const setFontSize = (size) => {
+        const fontSize = `${size}px`;
+
+        // Apply to content body
+        if (contentBody) {
+            contentBody.style.fontSize = fontSize;
+        }
+
+        // Update preview
+        if (fontSizePreview) {
+            fontSizePreview.style.fontSize = fontSize;
+        }
+
+        // Save to localStorage
+        localStorage.setItem('reader-font-size', size);
+    };
+
+    if (fontSizeSlider) {
+        fontSizeSlider.addEventListener('input', (e) => {
+            setFontSize(e.target.value);
+        });
+
+        // Load saved font size or use default (18px)
+        const savedSize = localStorage.getItem('reader-font-size') || '18';
+        fontSizeSlider.value = savedSize;
+        setFontSize(savedSize);
+    }
+
+    // Initialize Font Family
+    const savedFontFamily = localStorage.getItem('reader-font-family');
+    if (savedFontFamily) {
+        updateFontFamily(savedFontFamily);
+    }
+
+    // Initialize Theme
+    const savedThemeFamily = localStorage.getItem('reader-theme-family');
+    const savedThemeMode = localStorage.getItem('reader-theme-mode');
+
+    if (savedThemeFamily && themes[savedThemeFamily]) {
+        currentThemeFamily = savedThemeFamily;
+    }
+
+    if (savedThemeMode && (savedThemeMode === 'light' || savedThemeMode === 'dark')) {
+        currentThemeMode = savedThemeMode;
+    }
+
+    updateTheme();
+
+    // Theme Family Listeners
+    document.querySelectorAll('.theme-option').forEach(button => {
+        button.addEventListener('click', () => {
+            currentThemeFamily = button.dataset.theme;
+            updateTheme();
+        });
+    });
+
+    // Theme Mode Toggle Listener
+    const modeToggle = document.getElementById('theme-mode-toggle');
+    if (modeToggle) {
+        modeToggle.addEventListener('change', (e) => {
+            currentThemeMode = e.target.checked ? 'dark' : 'light';
+            updateTheme();
+        });
+    }
+
+    // Font Family Listeners
+    document.querySelectorAll('.font-option').forEach(button => {
+        button.addEventListener('click', () => {
+            updateFontFamily(button.dataset.font);
+        });
+    });
 };
 
 const toggleFullscreen = () => {
@@ -247,9 +608,13 @@ document.addEventListener('click', (event) => {
             event.preventDefault();
             navigateChapter('next');
             break;
-        case 'font-size-toggle':
+        case 'settings-toggle':
             event.preventDefault();
-            toggleFontSize();
+            toggleSettings();
+            break;
+        case 'settings-close':
+            event.preventDefault();
+            toggleSettings();
             break;
         case 'download-epub':
             event.preventDefault();
@@ -302,6 +667,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize settings
+    initSettings();
 
     const APP_DATA = JSON.parse(document.getElementById('app-data').textContent);
 
@@ -331,20 +698,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const topbarContainer = document.getElementById('topbar-container');
     const mainContent = document.getElementById('main-content');
 
-    // Close TOC when clicking on the overlay shield
-    const tocOverlay = document.getElementById('toc-overlay');
-    if (tocOverlay) {
-        tocOverlay.addEventListener('click', (event) => {
-            // Don't close TOC if clicking on the sidebar itself
-            if (event.target.closest('#sidebar-container')) {
+    // Close panels when clicking on the overlay shield
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', (event) => {
+            // Don't close if clicking on the sidebar itself (though overlay should be behind it)
+            if (event.target.closest('#sidebar-container') || event.target.closest('#settings-sidebar-container')) {
                 return;
             }
 
-            // Close the TOC when overlay is clicked
-            if (appContainer && appContainer.classList.contains('sidebar-open')) {
+            // Close any open panel when overlay is clicked
+            const appContainer = document.getElementById('app-container');
+            if (appContainer) {
                 event.preventDefault();
                 event.stopPropagation();
-                toggleSidebar();
+
+                if (appContainer.classList.contains('sidebar-open')) {
+                    toggleSidebar();
+                } else if (appContainer.classList.contains('settings-open')) {
+                    toggleSettings();
+                }
             }
         });
     }
@@ -586,6 +959,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', handleKeyDown, { passive: false });
 
     // --- UI Initialization ---
+    initSettings();
+
     // Populate TOC sidebar with data
     const bookCover = document.getElementById('book-cover');
     const bookTitle = document.getElementById('book-title');
@@ -621,10 +996,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    // Close sidebar when clicking on main content area if open
+    // Close sidebar or settings when clicking on main content area if open
     mainContent.addEventListener('click', () => {
         if (appContainer.classList.contains('sidebar-open')) {
             toggleSidebar();
+        } else if (appContainer.classList.contains('settings-open')) {
+            toggleSettings();
         }
     });
 
