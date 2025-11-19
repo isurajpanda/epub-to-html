@@ -217,7 +217,7 @@ const themes = {
             '--topbar-bg': '#3d3d00',
             '--topbar-button-hover': '#5c5c00',
             '--separator-color': '#5c5c00',
-            '--link-color': '#ffff66',
+            '--link-color': '#edc152ff',
             '--link-visited': '#cccc00'
         }
     },
