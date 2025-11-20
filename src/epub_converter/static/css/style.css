@@ -798,6 +798,44 @@ img {
 }
 
 /* Invisible overlay to block content interaction when TOC is open (Mobile Only) */
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1150;
+    /* Below sidebar (1200) but above toolbar (1100) */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Bionic Reading Styles */
+.b-word {
+    /* No special styling for the wrapper */
+}
+
+.b-bold {
+    font-weight: 700;
+}
+
+.b-fade {
+    opacity: 0.85;
+}
+
+/* Adjust opacity for dark mode if needed */
+body.dark-mode .b-fade {
+    opacity: 0.8;
+}
+
 @media (max-width: 768px) {
     .sidebar-overlay {
         position: fixed;

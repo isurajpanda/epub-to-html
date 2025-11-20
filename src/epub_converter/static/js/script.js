@@ -161,6 +161,167 @@ const updateFontFamily = (font) => {
     localStorage.setItem('reader-font-family', font);
 };
 
+// Bionic Reading Logic
+// Bionic Reading Logic
+let bionicObserver = null;
+
+const processBionicElement = (element) => {
+    if (element.dataset.bionicProcessed === 'true') return;
+
+    // Use TreeWalker to find all text nodes within this specific element
+    const walker = document.createTreeWalker(
+        element,
+        NodeFilter.SHOW_TEXT,
+        {
+            acceptNode: (node) => {
+                // Skip if empty
+                if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+                // Skip if parent is already processed
+                if (node.parentElement.classList.contains('b-word') ||
+                    node.parentElement.classList.contains('b-bold') ||
+                    node.parentElement.classList.contains('b-fade')) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                // Skip script, style, etc.
+                const tag = node.parentElement.tagName.toLowerCase();
+                if (tag === 'script' || tag === 'style' || tag === 'noscript') return NodeFilter.FILTER_REJECT;
+
+                return NodeFilter.FILTER_ACCEPT;
+            }
+        }
+    );
+
+    const textNodes = [];
+    let node;
+    while (node = walker.nextNode()) {
+        textNodes.push(node);
+    }
+
+    textNodes.forEach(textNode => {
+        const text = textNode.textContent;
+        const parts = text.split(/(\s+)/);
+        const fragment = document.createDocumentFragment();
+
+        parts.forEach(part => {
+            if (!part.trim()) {
+                fragment.appendChild(document.createTextNode(part));
+                return;
+            }
+
+            const word = part;
+            const len = word.length;
+
+            if (len === 1) {
+                const span = document.createElement('span');
+                span.className = 'b-word';
+                const b = document.createElement('b');
+                b.className = 'b-bold';
+                b.textContent = word;
+                span.appendChild(b);
+                fragment.appendChild(span);
+            } else {
+                let boldLen = Math.ceil(len / 2);
+                const boldPart = word.substring(0, boldLen);
+                const fadePart = word.substring(boldLen);
+
+                const span = document.createElement('span');
+                span.className = 'b-word';
+
+                const b = document.createElement('b');
+                b.className = 'b-bold';
+                b.textContent = boldPart;
+
+                const s = document.createElement('span');
+                s.className = 'b-fade';
+                s.textContent = fadePart;
+
+                span.appendChild(b);
+                span.appendChild(s);
+                fragment.appendChild(span);
+            }
+        });
+
+        if (textNode.parentNode) {
+            textNode.parentNode.replaceChild(fragment, textNode);
+        }
+    });
+
+    element.dataset.bionicProcessed = 'true';
+};
+
+const applyBionicReading = () => {
+    const contentBody = document.querySelector('.content-body');
+    if (!contentBody) return;
+
+    if (contentBody.classList.contains('bionic-active')) return;
+    contentBody.classList.add('bionic-active');
+    localStorage.setItem('reader-bionic-enabled', 'true');
+
+    // Disconnect existing observer if any
+    if (bionicObserver) {
+        bionicObserver.disconnect();
+    }
+
+    // Create new observer
+    bionicObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                processBionicElement(entry.target);
+                // Stop observing once processed to save resources
+                bionicObserver.unobserve(entry.target);
+            }
+        });
+    }, {
+        root: null, // viewport
+        rootMargin: '500px 0px', // Pre-load content well ahead of scrolling
+        threshold: 0.01
+    });
+
+    // Observe block-level elements that contain text
+    // We target p, div, li, h1-h6 to be granular enough
+    const targets = contentBody.querySelectorAll('p, div, li, h1, h2, h3, h4, h5, h6, blockquote');
+
+    // If no specific tags found (e.g. plain text file wrapped in pre), fallback to body
+    if (targets.length === 0) {
+        processBionicElement(contentBody);
+    } else {
+        targets.forEach(target => bionicObserver.observe(target));
+    }
+};
+
+const removeBionicReading = () => {
+    const contentBody = document.querySelector('.content-body');
+    if (!contentBody) return;
+
+    if (bionicObserver) {
+        bionicObserver.disconnect();
+        bionicObserver = null;
+    }
+
+    if (!contentBody.classList.contains('bionic-active')) return;
+    contentBody.classList.remove('bionic-active');
+    localStorage.setItem('reader-bionic-enabled', 'false');
+
+    // Remove all bionic spans
+    // This might still be heavy if the user read the whole book, but it's necessary.
+    // We can chunk this too if needed, but let's keep it simple for now.
+    const bWords = contentBody.querySelectorAll('.b-word');
+
+    bWords.forEach(span => {
+        const originalText = span.textContent;
+        const textNode = document.createTextNode(originalText);
+        if (span.parentNode) {
+            span.parentNode.replaceChild(textNode, span);
+        }
+    });
+
+    // Clean up processed flags
+    const processed = contentBody.querySelectorAll('[data-bionic-processed="true"]');
+    processed.forEach(el => delete el.dataset.bionicProcessed);
+
+    contentBody.normalize();
+};
+
 let currentThemeFamily = 'classic';
 let currentThemeMode = 'dark'; // Default to dark mode
 
@@ -442,6 +603,26 @@ const initSettings = () => {
             updateFontFamily(button.dataset.font);
         });
     });
+
+    // Bionic Reading Toggle
+    const bionicToggle = document.getElementById('bionic-reading-toggle');
+    if (bionicToggle) {
+        bionicToggle.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                applyBionicReading();
+            } else {
+                removeBionicReading();
+            }
+        });
+
+        // Initialize state
+        const bionicEnabled = localStorage.getItem('reader-bionic-enabled') === 'true';
+        bionicToggle.checked = bionicEnabled;
+        if (bionicEnabled) {
+            // Use setTimeout to allow initial render to complete
+            setTimeout(applyBionicReading, 100);
+        }
+    }
 };
 
 const toggleFullscreen = () => {
