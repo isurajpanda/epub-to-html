@@ -156,6 +156,54 @@ class EPUBConverter:
         self.h1_open_pattern = re.compile(r'<h1\b', re.IGNORECASE)
         self.h1_close_pattern = re.compile(r'</h1>', re.IGNORECASE)
 
+    def _fix_fake_anchors(self, content):
+        """
+        Convert <a> tags without href attribute to <span> tags.
+        This fixes styling issues where anchors are styled but don't link anywhere.
+        Handles nested tags correctly by using a stack.
+        """
+        # Tokenize by anchor tags
+        # This splits into: text, <a...>, text, </a>, text...
+        tokens = re.split(r'(</?a\b[^>]*>)', content, flags=re.IGNORECASE)
+        
+        result = []
+        stack = [] # Stack of booleans: True if current anchor was converted to span, False otherwise
+        
+        for token in tokens:
+            lower_token = token.lower()
+            
+            # Check if it's an opening anchor tag
+            if lower_token.startswith('<a'):
+                # Check if it has an href
+                if 'href=' in lower_token or 'href =' in lower_token:
+                    # It's a real link, keep it
+                    result.append(token)
+                    stack.append(False)
+                else:
+                    # It's a fake anchor (id only), convert to span
+                    # Replace <a with <span, preserving attributes
+                    new_tag = token.replace('<a', '<span', 1).replace('<A', '<span', 1)
+                    result.append(new_tag)
+                    stack.append(True)
+            
+            # Check if it's a closing anchor tag
+            elif lower_token.startswith('</a'):
+                if stack:
+                    was_converted = stack.pop()
+                    if was_converted:
+                        result.append('</span>')
+                    else:
+                        result.append(token)
+                else:
+                    # Unmatched closing tag, just keep it (or ignore)
+                    result.append(token)
+            
+            # Text or other tags
+            else:
+                result.append(token)
+                
+        return "".join(result)
+
     def _process_content_file(self, content_file_info, extract_dir, path_mapping, metadata=None):
         """Process a single content file and return the processed content."""
         i, content_file_path = content_file_info
@@ -421,6 +469,9 @@ class EPUBConverter:
             # This handles cases like <span Text... -> <span>Text...
             # We look for <span followed by whitespace and then non-attribute text
             result = re.sub(r'<span\s+(?![a-zA-Z0-9_:-]+=)([^>]+?)', r'<span>\1', result)
+            
+            # Fix fake anchors (<a> without href) by converting them to <span>
+            result = self._fix_fake_anchors(result)
             
             return result
         except Exception as e:
