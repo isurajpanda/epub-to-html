@@ -390,22 +390,21 @@ class EPUBConverter:
                         image_path = src_match.group(1)
                         is_cover_image = False
                         
+                        # Check for explicit ID or class indicating cover
+                        # The user reported id="coverimage"
+                        if 'id="coverimage"' in full_img_tag.lower() or 'class="coverimage"' in full_img_tag.lower() or 'class="cover"' in full_img_tag.lower():
+                            is_cover_image = True
+                        
                         # Check if it matches the actual cover file path
-                        if metadata and 'actual_cover_file_path' in metadata:
+                        if not is_cover_image and metadata and 'actual_cover_file_path' in metadata:
                             actual_cover = metadata['actual_cover_file_path']
                             if actual_cover:
                                 try:
                                     from pathlib import Path
                                     cover_path = Path(actual_cover)
                                     cover_name = cover_path.name
-                                    cover_stem = cover_path.stem
                                     
-                                    # We need to check if the *original* src matched the cover, 
-                                    # but here we have the *replaced* src (image_path).
-                                    # However, replace_img_src_in_chapter already did the lookup.
-                                    # A better way is to check if the image_path corresponds to the cover image in the mapping.
-                                    
-                                    # Let's try to find the cover image path in the mapping again
+                                    # Look for the cover image path in the mapping
                                     cover_mapped_path = None
                                     for key, value in path_mapping.items():
                                         if Path(key).name == cover_name:
@@ -417,14 +416,14 @@ class EPUBConverter:
                                     
                                     # Fallback: check if 'cover' is in the name
                                     if not is_cover_image and ('cover' in image_path.lower() or 'cover' in cover_name.lower()):
-                                        # This is a bit loose, but might be needed
-                                        pass
+                                        is_cover_image = True
                                         
                                 except Exception as e:
                                     print(f"    Warning: Error in cover image replacement: {e}")
                         
                         if is_cover_image:
                             # Cover image should be eager-loaded for LCP
+                            # Also ensure fetchpriority="high" is added
                             if replaced_tag.endswith('/>'):
                                 replaced_tag = replaced_tag[:-2] + ' loading="eager" fetchpriority="high" decoding="async" />'
                             else:
@@ -665,7 +664,11 @@ class EPUBConverter:
             return rcssmin.cssmin(css_content)
         except ImportError:
             # Fallback to simple minification if rcssmin not available
+            # Remove comments
             css_content = self.css_comment_pattern.sub('', css_content)
+            # Remove whitespace around braces and colons
+            css_content = re.sub(r'\s*([{}:;,])\s*', r'\1', css_content)
+            # Remove remaining whitespace
             css_content = self.css_whitespace_pattern.sub(' ', css_content)
             return css_content.strip()
 
@@ -676,8 +679,13 @@ class EPUBConverter:
             return rjsmin.jsmin(js_content)
         except ImportError:
             # Fallback to simple minification if rjsmin not available
+            # Remove line comments
             js_content = self.js_line_comment_pattern.sub('', js_content)
+            # Remove block comments
             js_content = self.js_block_comment_pattern.sub('', js_content)
+            # Remove whitespace around operators and punctuation
+            js_content = re.sub(r'\s*([=+\-*/(){}\[\],;])\s*', r'\1', js_content)
+            # Remove remaining whitespace
             js_content = self.js_whitespace_pattern.sub(' ', js_content)
             return js_content.strip()
 

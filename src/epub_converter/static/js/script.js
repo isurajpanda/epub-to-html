@@ -123,8 +123,7 @@ const updateFontSize = (size) => {
         }
     }
 
-    // Save to localStorage
-    localStorage.setItem('reader-font-size', size);
+    // localStorage removed - no storage
 };
 
 const updateFontFamily = (font) => {
@@ -151,14 +150,13 @@ const updateFontFamily = (font) => {
         fontSizePreview.style.fontFamily = fontFamily;
     }
 
-    // Update active state in UI
-    document.querySelectorAll('.font-option').forEach(btn => {
+    // Update active state in UI (only for font family buttons)
+    document.querySelectorAll('.font-option[data-font]').forEach(btn => {
         if (btn.dataset.font === font) btn.classList.add('active');
         else btn.classList.remove('active');
     });
 
-    // Save to localStorage
-    localStorage.setItem('reader-font-family', font);
+    // localStorage removed - no storage
 };
 
 // Bionic Reading Logic
@@ -182,9 +180,18 @@ const processBionicElement = (element) => {
                     node.parentElement.classList.contains('b-fade')) {
                     return NodeFilter.FILTER_REJECT;
                 }
-                // Skip script, style, etc.
+                // Skip script, style, buttons, etc.
                 const tag = node.parentElement.tagName.toLowerCase();
-                if (tag === 'script' || tag === 'style' || tag === 'noscript') return NodeFilter.FILTER_REJECT;
+                if (tag === 'script' || tag === 'style' || tag === 'noscript' || tag === 'button') return NodeFilter.FILTER_REJECT;
+
+                // Also check if any ancestor is a button or has data-no-bionic
+                let parent = node.parentElement;
+                while (parent && parent !== element) {
+                    if (parent.tagName.toLowerCase() === 'button' || parent.dataset.noBionic === 'true') {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    parent = parent.parentElement;
+                }
 
                 return NodeFilter.FILTER_ACCEPT;
             }
@@ -204,6 +211,7 @@ const processBionicElement = (element) => {
 
         parts.forEach(part => {
             if (!part.trim()) {
+                // Preserve whitespace as text node (not wrapped)
                 fragment.appendChild(document.createTextNode(part));
                 return;
             }
@@ -255,7 +263,7 @@ const applyBionicReading = () => {
 
     if (contentBody.classList.contains('bionic-active')) return;
     contentBody.classList.add('bionic-active');
-    localStorage.setItem('reader-bionic-enabled', 'true');
+    // localStorage removed - no storage
 
     // Disconnect existing observer if any
     if (bionicObserver) {
@@ -287,6 +295,12 @@ const applyBionicReading = () => {
     } else {
         targets.forEach(target => bionicObserver.observe(target));
     }
+
+    // Apply to preview text as well
+    const preview = document.getElementById('font-size-preview');
+    if (preview) {
+        processBionicElement(preview);
+    }
 };
 
 const removeBionicReading = () => {
@@ -300,7 +314,7 @@ const removeBionicReading = () => {
 
     if (!contentBody.classList.contains('bionic-active')) return;
     contentBody.classList.remove('bionic-active');
-    localStorage.setItem('reader-bionic-enabled', 'false');
+    // localStorage removed - no storage
 
     // Remove all bionic spans
     // This might still be heavy if the user read the whole book, but it's necessary.
@@ -320,6 +334,21 @@ const removeBionicReading = () => {
     processed.forEach(el => delete el.dataset.bionicProcessed);
 
     contentBody.normalize();
+
+    // Remove from preview text as well
+    const preview = document.getElementById('font-size-preview');
+    if (preview) {
+        const bWords = preview.querySelectorAll('.b-word');
+        bWords.forEach(span => {
+            const originalText = span.textContent;
+            const textNode = document.createTextNode(originalText);
+            if (span.parentNode) {
+                span.parentNode.replaceChild(textNode, span);
+            }
+        });
+        delete preview.dataset.bionicProcessed;
+        preview.normalize();
+    }
 };
 
 let currentThemeFamily = 'classic';
@@ -521,9 +550,7 @@ const updateTheme = () => {
     document.body.classList.remove('light-mode', 'dark-mode');
     document.body.classList.add(`${currentThemeMode}-mode`);
 
-    // Save to localStorage
-    localStorage.setItem('reader-theme-family', currentThemeFamily);
-    localStorage.setItem('reader-theme-mode', currentThemeMode);
+    // localStorage removed - no storage
 };
 
 const initSettings = () => {
@@ -545,8 +572,7 @@ const initSettings = () => {
             fontSizePreview.style.fontSize = fontSize;
         }
 
-        // Save to localStorage
-        localStorage.setItem('reader-font-size', size);
+        // localStorage removed - no storage
     };
 
     if (fontSizeSlider) {
@@ -554,29 +580,17 @@ const initSettings = () => {
             setFontSize(e.target.value);
         });
 
-        // Load saved font size or use default (18px)
-        const savedSize = localStorage.getItem('reader-font-size') || '18';
+        // Load saved font size or use default (18px) - localStorage removed
+        const savedSize = '18';
         fontSizeSlider.value = savedSize;
         setFontSize(savedSize);
     }
 
-    // Initialize Font Family
-    const savedFontFamily = localStorage.getItem('reader-font-family');
-    if (savedFontFamily) {
-        updateFontFamily(savedFontFamily);
-    }
+    // Initialize Font Family - localStorage removed
+    // Default to 'original' font
 
-    // Initialize Theme
-    const savedThemeFamily = localStorage.getItem('reader-theme-family');
-    const savedThemeMode = localStorage.getItem('reader-theme-mode');
-
-    if (savedThemeFamily && themes[savedThemeFamily]) {
-        currentThemeFamily = savedThemeFamily;
-    }
-
-    if (savedThemeMode && (savedThemeMode === 'light' || savedThemeMode === 'dark')) {
-        currentThemeMode = savedThemeMode;
-    }
+    // Initialize Theme - localStorage removed
+    // Use default theme (classic dark)
 
     updateTheme();
 
@@ -597,8 +611,8 @@ const initSettings = () => {
         });
     }
 
-    // Font Family Listeners
-    document.querySelectorAll('.font-option').forEach(button => {
+    // Font Family Listeners (exclude Bionic button)
+    document.querySelectorAll('.font-option[data-font]').forEach(button => {
         button.addEventListener('click', () => {
             updateFontFamily(button.dataset.font);
         });
@@ -607,22 +621,20 @@ const initSettings = () => {
     // Bionic Reading Toggle
     const bionicToggle = document.getElementById('bionic-reading-toggle');
     if (bionicToggle) {
-        bionicToggle.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                applyBionicReading();
-            } else {
-                removeBionicReading();
-            }
-        });
+        // Click handled by global listener
 
-        // Initialize state
-        const bionicEnabled = localStorage.getItem('reader-bionic-enabled') === 'true';
-        bionicToggle.checked = bionicEnabled;
-        if (bionicEnabled) {
-            // Use setTimeout to allow initial render to complete
-            setTimeout(applyBionicReading, 100);
-        }
+        // Initialize state - localStorage removed
+        // Default to bionic reading off
     }
+
+    // Font Family - ensure active state is shown correctly
+    document.querySelectorAll('.font-option[data-font]').forEach(button => {
+        const font = button.dataset.font;
+        const savedFont = 'original'; // localStorage removed
+        if (font === savedFont) {
+            button.classList.add('active');
+        }
+    });
 };
 
 const toggleFullscreen = () => {
@@ -808,6 +820,17 @@ document.addEventListener('click', (event) => {
         case 'modal-close':
             event.preventDefault();
             closeImageModal();
+            break;
+        case 'bionic-reading-toggle':
+            event.preventDefault();
+            const isBionicEnabled = target.classList.contains('active'); // localStorage removed - check current state
+            if (!isBionicEnabled) {
+                applyBionicReading();
+                target.classList.add('active');
+            } else {
+                removeBionicReading();
+                target.classList.remove('active');
+            }
             break;
     }
 });

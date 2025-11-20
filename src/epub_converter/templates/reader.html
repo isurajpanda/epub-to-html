@@ -53,8 +53,7 @@
             <div class="toc-sidebar">
                 <div class="toc-sidebar-header">
                     {% if metadata.get('cover_image_url') %}
-                    <img id="book-cover" src="{{ metadata.get('cover_image_url') }}" alt="Book cover"
-                        fetchpriority="high" loading="eager">
+                    <img id="book-cover" src="{{ metadata.get('cover_image_url') }}" alt="Book cover" loading="lazy">
                     {% else %}
                     <img id="book-cover" src="" alt="Book cover" style="display: none;">
                     {% endif %}
@@ -78,6 +77,15 @@
                     <div class="settings-section">
                         <div class="font-size-control">
                             <div id="font-size-preview" class="font-size-preview">Lorem ipsum</div>
+
+                            <!-- Bionic Reading Button -->
+                            <div style="margin-top: 1rem; margin-bottom: 1rem;">
+                                <button id="bionic-reading-toggle" class="font-option" data-no-bionic="true"
+                                    style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                    <span>Bionic Reading</span>
+                                </button>
+                            </div>
+
                             <h3>Font Size</h3>
                             <div class="slider-container">
                                 <span class="size-label small">A</span>
@@ -92,38 +100,25 @@
                     <div class="settings-section">
                         <h3>Font Family</h3>
                         <div class="font-family-grid">
-                            <button class="font-option" data-font="original">Original</button>
-                            <button class="font-option active" data-font="sans-serif"
+                            <button class="font-option active" data-font="original"
+                                style="font-family: serif;">Original</button>
+                            <button class="font-option" data-font="sans-serif"
                                 style="font-family: sans-serif;">Sans</button>
                             <button class="font-option" data-font="serif" style="font-family: serif;">Serif</button>
-                            <button class="font-option" data-font="monospace"
-                                style="font-family: monospace;">Mono</button>
                             <button class="font-option" data-font="georgia"
                                 style="font-family: Georgia, serif;">Georgia</button>
                             <button class="font-option" data-font="comic-sans"
                                 style="font-family: 'Comic Sans MS', cursive;">Comic</button>
                         </div>
 
-                        <!-- Reading Mode Section -->
-                        <div class="setting-group">
-                            <div class="theme-header">
-                                <h3>Reading Mode</h3>
-                            </div>
-                            <div class="mode-toggle-row">
-                                <span class="mode-label">Bionic Reading</span>
-                                <label class="switch">
-                                    <input type="checkbox" id="bionic-reading-toggle">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                        </div>
+
                         <div class="setting-group">
                             <div class="theme-header">
                                 <h3>Theme</h3>
                                 <div class="mode-toggle">
                                     <span class="mode-label">Light</span>
                                     <label class="switch">
-                                        <input type="checkbox" id="theme-mode-toggle">
+                                        <input type="checkbox" id="theme-mode-toggle" aria-label="Toggle Dark Mode">
                                         <span class="slider round"></span>
                                     </label>
                                     <span class="mode-label">Dark</span>
