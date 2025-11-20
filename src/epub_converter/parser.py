@@ -250,9 +250,14 @@ class EPUBParser:
                         if filtered_hrefs and self._should_filter_content_file(href, filtered_hrefs):
                             print(f"🔴 Filtered out content file: {Path(href).name}")
                             continue
-                            
+                        
                         full_path = (opf_dir / href).resolve()
                         if full_path.exists():
+                            # Check for internal TOC
+                            if self._is_internal_toc(full_path):
+                                print(f"🔴 Filtered out internal TOC file: {full_path.name}")
+                                continue
+                                
                             content_files.append((idref, full_path))
                         else:
                             print(f"    Warning: Spine item not found: {full_path}")
@@ -262,6 +267,64 @@ class EPUBParser:
         except Exception as e:
             print(f"Warning: Could not parse OPF spine properly: {e}. Using fallback.")
             return self.find_content_files_fallback(opf_root)
+
+    def _is_internal_toc(self, file_path):
+        """
+        Check if a file is an internal Table of Contents based on heuristics.
+        Returns True if it looks like an internal TOC, False otherwise.
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+            
+            # Quick check for common TOC indicators in the first 1000 chars
+            content_start = content[:2000].lower()
+            
+            # Indicators that strongly suggest a TOC
+            toc_indicators = [
+                'class="toc"', 'id="toc"', 'class="contents"', 'id="contents"',
+                'class="index"', 'epub:type="toc"', 'role="doc-toc"'
+            ]
+            
+            # Title indicators
+            title_indicators = [
+                '>contents<', '>table of contents<', '>index<'
+            ]
+            
+            has_toc_indicator = any(ind in content_start for ind in toc_indicators)
+            has_title_indicator = any(ind in content_start for ind in title_indicators)
+            
+            # If no explicit indicators, be very conservative
+            if not (has_toc_indicator or has_title_indicator):
+                return False
+            
+            # Calculate link density
+            # Count number of links vs total text length or number of paragraphs
+            link_count = content.lower().count('<a href=')
+            p_count = content.lower().count('<p')
+            br_count = content.lower().count('<br')
+            div_count = content.lower().count('<div')
+            
+            # If there are very few links, it's probably not a TOC
+            if link_count < 3:
+                return False
+                
+            # Heuristic: High ratio of links to paragraphs/lines
+            # Most TOCs have one link per paragraph or line
+            total_blocks = max(1, p_count + br_count + div_count)
+            link_ratio = link_count / total_blocks
+            
+            # If more than 50% of blocks contain links, it's likely a TOC or Index
+            if link_ratio > 0.5:
+                # Double check: ensure it's not just a chapter with many footnotes
+                # TOC links usually point to other files or fragments
+                return True
+                
+            return False
+            
+        except Exception as e:
+            print(f"    Warning: Error checking for internal TOC in {file_path.name}: {e}")
+            return False
 
     def find_content_files_fallback(self, extract_dir):
         """Fallback method to find content files if OPF parsing fails."""

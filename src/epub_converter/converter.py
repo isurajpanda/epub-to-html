@@ -674,9 +674,10 @@ class EPUBConverter:
 
     def _minify_js(self, js_content):
         """Minify JavaScript using rjsmin library."""
+        minified = ""
         try:
             import rjsmin
-            return rjsmin.jsmin(js_content)
+            minified = rjsmin.jsmin(js_content)
         except ImportError:
             # Fallback to simple minification if rjsmin not available
             # Remove line comments
@@ -686,8 +687,10 @@ class EPUBConverter:
             # Remove whitespace around operators and punctuation
             js_content = re.sub(r'\s*([=+\-*/(){}\[\],;])\s*', r'\1', js_content)
             # Remove remaining whitespace
-            js_content = self.js_whitespace_pattern.sub(' ', js_content)
-            return js_content.strip()
+            minified = self.js_whitespace_pattern.sub(' ', js_content)
+
+        # Ensure it is strictly one line regardless of method used
+        return minified.replace('\n', ' ').replace('\r', ' ').strip()
 
     def fix_links_and_images(self, html_content, content_id_mapping):
         """Fix all internal anchor href paths."""

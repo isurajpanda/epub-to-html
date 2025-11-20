@@ -997,13 +997,13 @@ body.dark-mode .b-fade {
 
 .font-size-preview {
     padding: 1rem;
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.1);
     /* Add checkerboard pattern */
     background-image:
-        linear-gradient(45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%),
-        linear-gradient(-45deg, rgba(0, 0, 0, 0.1) 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.1) 75%),
-        linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.1) 75%);
+        linear-gradient(45deg, rgba(0, 0, 0, 0.2) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(0, 0, 0, 0.2) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.2) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.2) 75%);
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
     border-radius: 8px;
@@ -1042,6 +1042,7 @@ body.dark-mode .b-fade {
 #font-size-slider {
     flex-grow: 1;
     -webkit-appearance: none;
+    appearance: none;
     height: 4px;
     background: var(--sidebar-border);
     border-radius: 2px;
@@ -1071,7 +1072,9 @@ body.dark-mode .b-fade {
 }
 
 .font-option {
-    padding: 0.75rem;
+    width: 100%;
+    height: 42px;
+    padding: 0 0.5rem;
     background-color: rgba(255, 255, 255, 0.08);
     border: 1px solid var(--sidebar-border);
     border-radius: 6px;
@@ -1081,6 +1084,10 @@ body.dark-mode .b-fade {
     text-align: center;
     font-size: 0.9rem;
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
 }
 
 .font-option:hover {

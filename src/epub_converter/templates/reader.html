@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="public, max-age=31536000">
+    <meta name="robots" content="index, follow">
     <title>{{ title }}</title>
 
     <meta name="description"
@@ -24,7 +25,8 @@
     <meta property="og:author" content="{{ metadata.get('author') }}">{% endif %}
     <meta property="og:description" content="{{ metadata.get('description', 'Read ' + title + ' online.') }}">
 
-    <!-- Preload cover image for better LCP performance -->
+    <!-- Preload critical resources for better performance -->
+    <link rel="preload" href="/static/style.css" as="style" crossorigin="anonymous" fetchpriority="high">
     {% if metadata.get('cover_image_url') %}
     <link rel="preload" href="{{ metadata.get('cover_image_url') }}" as="image" fetchpriority="high">
     {% endif %}
@@ -104,7 +106,10 @@
                                 style="font-family: serif;">Original</button>
                             <button class="font-option" data-font="sans-serif"
                                 style="font-family: sans-serif;">Sans</button>
-                            <button class="font-option" data-font="serif" style="font-family: serif;">Serif</button>
+                            <button class="font-option" data-font="arial"
+                                style="font-family: Arial, sans-serif;">Arial</button>
+                            <button class="font-option" data-font="verdana"
+                                style="font-family: Verdana, sans-serif;">Verdana</button>
                             <button class="font-option" data-font="georgia"
                                 style="font-family: Georgia, serif;">Georgia</button>
                             <button class="font-option" data-font="comic-sans"

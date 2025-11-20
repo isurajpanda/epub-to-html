@@ -137,6 +137,10 @@ const updateFontFamily = (font) => {
         fontFamily = '';
     } else if (font === 'georgia') {
         fontFamily = 'Georgia, serif';
+    } else if (font === 'arial') {
+        fontFamily = 'Arial, sans-serif';
+    } else if (font === 'verdana') {
+        fontFamily = 'Verdana, sans-serif';
     } else if (font === 'comic-sans') {
         fontFamily = "'Comic Sans MS', cursive";
     } else {
