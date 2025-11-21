@@ -762,9 +762,11 @@ class EPUBConverter:
     def _generate_expected_path_mapping(self, extract_dir, content_files, epub_output_folder, metadata=None):
         """Generate image path mapping without processing images, mirroring ImageProcessor naming.
         Ensures identical HTML paths in --no-image and normal modes.
+        Also extracts image dimensions for layout stability.
         """
         from .image_processor import crc64  # reuse the exact hashing
         path_mapping = {}
+        image_metadata = {}
 
         # Title-based hash, same sanitization as ImageProcessor
         epub_title = (metadata or {}).get('title', 'Unknown') or 'Unknown'
@@ -792,7 +794,7 @@ class EPUBConverter:
                         rel = img_src
                     if rel not in seen:
                         seen.add(rel)
-                        ordered_images.append((rel, img_src, Path(img_src).name))
+                        ordered_images.append((rel, img_src, Path(img_src).name, abs_img_path))
             except Exception:
                 continue
 
@@ -838,7 +840,7 @@ class EPUBConverter:
                 n = n // 26 - 1
             return letters
 
-        for rel, original_src, filename in ordered_images:
+        for rel, original_src, filename, abs_path in ordered_images:
             # Determine if this is the cover image
             is_cover = False
             if cover_rel and rel == cover_rel:
@@ -858,11 +860,22 @@ class EPUBConverter:
             if '/' in rel:
                 path_mapping[f"../{rel}"] = html_path
                 path_mapping[f"{rel}"] = html_path
-                path_mapping[f"./{rel}"] = html_path
+            path_mapping[f"./{rel}"] = html_path
+            
+            # Extract dimensions
+            try:
+                width, height = self.image_processor.get_image_dimensions(abs_path)
+                if width and height:
+                    image_metadata[html_path] = {
+                        'width': width,
+                        'height': height
+                    }
+            except Exception as e:
+                print(f"    Warning: Could not get dimensions for {filename}: {e}")
             
             letter_index += 1
 
-        return path_mapping
+        return path_mapping, image_metadata
 
     def convert_single_epub(self, epub_path):
         """Convert a single EPUB file"""
@@ -893,7 +906,7 @@ class EPUBConverter:
                 print(f"  Skipping image processing (--no-image mode)")
                 # Generate expected path mapping without processing images
                 self._detected_cover_filename = None # Reset
-                path_mapping = self._generate_expected_path_mapping(extract_dir, content_files, epub_output_folder, metadata)
+                path_mapping, image_metadata = self._generate_expected_path_mapping(extract_dir, content_files, epub_output_folder, metadata)
                 
                 # Set cover_image_url to the detected cover filename or default
                 # In normal mode, the cover is also hashed (e.g. HASH_A.avif).

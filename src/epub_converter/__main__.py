@@ -98,8 +98,6 @@ def main():
             print("   pyvips not available (using Pillow)")
         except ImportError:
             print("   No image processing library available!")
-            sys.exit(1)
-    
     # Check for selectolax
     try:
         import selectolax

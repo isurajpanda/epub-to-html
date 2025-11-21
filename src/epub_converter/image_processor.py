@@ -238,6 +238,27 @@ class ImageProcessor:
             print(f"Warning: Could not analyze image {img_path} with pyvips: {e}")
             return {'is_bw': False, 'complexity': 80, 'width': 1080, 'height': 1080}
 
+    def get_image_dimensions(self, img_path):
+        """Get image dimensions efficiently."""
+        try:
+            if HAS_PYVIPS:
+                import pyvips
+                # new_from_file is lazy and should be fast for just reading headers
+                img = pyvips.Image.new_from_file(str(img_path))
+                return img.width, img.height
+            else:
+                # Fallback to Pillow if available
+                try:
+                    from PIL import Image
+                    with Image.open(img_path) as img:
+                        return img.width, img.height
+                except ImportError:
+                    pass
+        except Exception as e:
+            print(f"Warning: Could not get dimensions for {img_path}: {e}")
+        
+        return None, None
+
     def _process_single_image_pyvips(self, img_path, extract_dir, epub_output_folder, central_images_folder, epub_title=None, is_cover=False, image_index=0, is_directory_mode=False):
         """Process a single image using pyvips and save as file."""
         try:
