@@ -204,7 +204,7 @@ class EPUBConverter:
                 
         return "".join(result)
 
-    def _process_content_file(self, content_file_info, extract_dir, path_mapping, metadata=None):
+    def _process_content_file(self, content_file_info, extract_dir, path_mapping, metadata=None, image_metadata=None):
         """Process a single content file and return the processed content."""
         i, content_file_path = content_file_info
         try:
@@ -441,6 +441,38 @@ class EPUBConverter:
                         else:
                             replaced_tag = replaced_tag[:-1] + ' loading="lazy" decoding="async">'
                 
+                # Add width and height attributes if available in metadata
+                # This helps prevent layout shifts (CLS)
+                if image_metadata:
+                    # Extract the new src to look up metadata
+                    src_match = self.img_src_extract_pattern.search(replaced_tag)
+                    if src_match:
+                        new_src = src_match.group(1)
+                        img_info = image_metadata.get(new_src)
+                        
+                        # If not found by exact path, try filename matching
+                        if not img_info:
+                            new_src_name = Path(new_src).name
+                            for key, info in image_metadata.items():
+                                if Path(key).name == new_src_name:
+                                    img_info = info
+                                    break
+                        
+                        if img_info and 'width' in img_info and 'height' in img_info:
+                            width = img_info['width']
+                            height = img_info['height']
+                            
+                            # Check if width/height already exist
+                            has_width = 'width=' in replaced_tag.lower()
+                            has_height = 'height=' in replaced_tag.lower()
+                            
+                            if not has_width and not has_height:
+                                # Add dimensions
+                                if replaced_tag.endswith('/>'):
+                                    replaced_tag = replaced_tag[:-2] + f' width="{width}" height="{height}" />'
+                                else:
+                                    replaced_tag = replaced_tag[:-1] + f' width="{width}" height="{height}">'
+
                 return replaced_tag
 
             # Always process images in content to fix paths (even if --no-image flag is set)
@@ -477,7 +509,7 @@ class EPUBConverter:
             print(f"    Warning: Could not read {content_file_path.name}: {e}")
             return None
 
-    def combine_and_generate_html(self, content_files, extract_dir, metadata, path_mapping, custom_css=None):
+    def combine_and_generate_html(self, content_files, extract_dir, metadata, path_mapping, custom_css=None, image_metadata=None):
         """Combine content files, embed images as base64, and generate the final HTML with UI using parallel processing."""
         print(f"  Combining {len(content_files)} content files in reading order:")
         
@@ -485,7 +517,7 @@ class EPUBConverter:
             combined_body = []
             for i, (_, content_file_path) in enumerate(content_files, 1):
                 print(f"    {i}. {content_file_path.name}")
-                result = self._process_content_file((i, content_file_path), extract_dir, path_mapping, metadata)
+                result = self._process_content_file((i, content_file_path), extract_dir, path_mapping, metadata, image_metadata)
                 if result:
                     combined_body.append(result)
         else:  # For larger numbers of files, use parallel processing
@@ -495,7 +527,7 @@ class EPUBConverter:
             with ThreadPoolExecutor(max_workers=min(len(content_files), 8)) as executor:
                 # Submit all content file processing tasks
                 future_to_file = {
-                    executor.submit(self._process_content_file, (i, content_file_path), extract_dir, path_mapping, metadata): (i, content_file_path)
+                    executor.submit(self._process_content_file, (i, content_file_path), extract_dir, path_mapping, metadata, image_metadata): (i, content_file_path)
                     for i, (_, content_file_path) in enumerate(content_files, 1)
                 }
                 
@@ -932,7 +964,7 @@ class EPUBConverter:
                     images_output_folder.mkdir(exist_ok=True)
                     is_directory_mode = False
                 
-                path_mapping = self.image_processor.process_images_and_get_mapping(
+                path_mapping, image_metadata = self.image_processor.process_images_and_get_mapping(
                     image_files, extract_dir, epub_output_folder, epub_title, actual_cover_file_path,
                     central_images_folder=images_output_folder, is_directory_mode=is_directory_mode
                 )
@@ -1004,7 +1036,7 @@ class EPUBConverter:
                 except Exception as e:
                     print(f"  Warning: Could not read custom CSS file: {e}")
 
-            combined_html = self.combine_and_generate_html(content_files, extract_dir, metadata, path_mapping, custom_css)
+            combined_html = self.combine_and_generate_html(content_files, extract_dir, metadata, path_mapping, custom_css, image_metadata=locals().get('image_metadata'))
             final_html = self.fix_links_and_images(combined_html, content_id_mapping)
             
             output_html = epub_output_folder / "index.html"

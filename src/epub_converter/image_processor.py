@@ -342,7 +342,9 @@ class ImageProcessor:
                 'filename': unquote(img_path.name),
                 'output_filename': output_filename,
                 'output_path': output_path,
-                'html_path': html_path
+                'html_path': html_path,
+                'width': img.width,
+                'height': img.height
             }
 
         except Exception as e:
@@ -352,6 +354,7 @@ class ImageProcessor:
     def process_images_and_get_mapping(self, image_files, extract_dir, output_folder, epub_title=None, cover_image_path=None, central_images_folder=None, is_directory_mode=False):
         """Process images to AVIF using pyvips and save to disk."""
         path_mapping = {}
+        image_metadata = {}
         
         # Identify cover image
         cover_image = None
@@ -382,6 +385,13 @@ class ImageProcessor:
                     # Add multiple path variations to the mapping for better lookup
                     path_mapping[result['relative_original']] = result['html_path']
                     path_mapping[result['filename']] = result['html_path']
+                    
+                    # Store metadata
+                    image_metadata[result['html_path']] = {
+                        'width': result['width'],
+                        'height': result['height']
+                    }
+                    
                     # Also add variations like ../Images/filename
                     path_variation = result['relative_original']
                     if '/' in path_variation:
@@ -430,6 +440,13 @@ class ImageProcessor:
                             # Add multiple path variations to the mapping for better lookup
                             path_mapping[result['relative_original']] = result['html_path']
                             path_mapping[result['filename']] = result['html_path']
+                            
+                            # Store metadata
+                            image_metadata[result['html_path']] = {
+                                'width': result['width'],
+                                'height': result['height']
+                            }
+                            
                             # Also add variations like ../Images/filename
                             path_variation = result['relative_original']
                             if '/' in path_variation:
@@ -440,4 +457,4 @@ class ImageProcessor:
                     except Exception as e:
                         print(f"Error processing image {img_path}: {e}")
 
-        return path_mapping
+        return path_mapping, image_metadata
