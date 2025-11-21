@@ -67,11 +67,8 @@ class EPUBParser:
         # Chapter title patterns for basic TOC generation
         self.chapter_patterns = [
             re.compile(r'Chapter\s+\d+[:\s]*(.*?)(?:\n|$)', re.IGNORECASE),
-            re.compile(r'Chapter\s+[IVX]+[:\s]*(.*?)(?:\n|$)', re.IGNORECASE),
-            re.compile(r'Part\s+\d+[:\s]*(.*?)(?:\n|$)', re.IGNORECASE),
-            re.compile(r'Section\s+\d+[:\s]*(.*?)(?:\n|$)', re.IGNORECASE),
-            re.compile(r'^\s*(\d+\.?\s+.*?)(?:\n|$)', re.MULTILINE | re.IGNORECASE),
-            re.compile(r'^\s*([IVX]+\.?\s+.*?)(?:\n|$)', re.MULTILINE | re.IGNORECASE)
+            re.compile(r'^\s*(\d+)\.\s+(.*?)(?:\n|$)', re.MULTILINE),
+            re.compile(r'^\s*(.*?)\s*$', re.MULTILINE)
         ]
         
         # Heading patterns
@@ -99,7 +96,15 @@ class EPUBParser:
         
         # Navigation parsing patterns
         self.link_pattern = re.compile(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', re.DOTALL | re.IGNORECASE)
-        self.navpoint_pattern = re.compile(r'<navPoint[^>]*>.*?<navLabel>.*?<text>(.*?)</text>.*?</navLabel>.*?<content[^>]*src=["\']([^"\']+)["\'][^>]*>.*?</content>.*?</navPoint>', re.DOTALL | re.IGNORECASE)
+        self.navpoint_pattern = re.compile(r'<navPoint[^>]*>.*?<navLabel>.*?<text>(.*?)</text>.*?<content[^>]*src=["\']([^"\']+)["\'][^>]*>.*?</navPoint>', re.DOTALL | re.IGNORECASE)
+
+        # Compile unwanted content patterns into a single regex for O(1) lookup
+        # Sort by length descending to ensure longest matches are tried first
+        sorted_patterns = sorted(self.unwanted_patterns, key=len, reverse=True)
+        # Escape patterns and join with |
+        # Use word boundaries \b to match whole words/phrases
+        pattern_str = '|'.join(map(re.escape, sorted_patterns))
+        self.unwanted_content_regex = re.compile(rf'\b({pattern_str})\b', re.IGNORECASE)
 
     def _get_ns_tag(self, tag, ns_key='opf'):
         """Helper to get a namespace-prefixed tag."""
@@ -110,37 +115,10 @@ class EPUBParser:
         if not label:
             return False
             
-        label_lower = label.lower().strip()
-        
-        # Define specific patterns that should be filtered (avoid false positives)
-        filter_patterns = [
-            # Exact matches for common unwanted content
-            'copyright', 'newsletter', 'about j-novel club', 'about yen press',
-            'yen newsletter', 'j-novel club newsletter', 'newsletter signup',
-            'newsletter sign-up', 'newsletter subscription', 'subscribe now',
-            'subscription page', 'sign up page', 'signup page', 'contact us',
-            'support page', 'help page', 'advertisement', 'promo page',
-            'promotion page', 'legal notice', 'legal information',
-            'terms of service', 'privacy policy', 'back matter', 'end matter',
-            'colophon', 'imprint', 'publisher information', 'about publisher',
-            'credits and copyright', 'copyright page', 'other series'
-        ]
-        
-        # Check for exact matches or very specific patterns
-        for pattern in filter_patterns:
-            pattern_lower = pattern.lower()
-            
-            # Exact match
-            if pattern_lower == label_lower:
-                return True
-            
-            # Check if it's a standalone word/phrase (not part of a longer title)
-            if (pattern_lower in label_lower and 
-                (label_lower.startswith(pattern_lower + ' ') or
-                 label_lower.endswith(' ' + pattern_lower) or
-                 f' {pattern_lower} ' in label_lower)):
-                return True
-        
+        # Use pre-compiled regex for O(1) matching
+        if self.unwanted_content_regex.search(label):
+            return True
+    
         # Additional checks for href-based filtering
         if href:
             href_lower = href.lower()

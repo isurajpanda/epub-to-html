@@ -5,29 +5,7 @@ from urllib.parse import unquote
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import multiprocessing
 
-def crc64(data):
-    """Calculate CRC64-ECMA value for the given data."""
-    # CRC64-ECMA polynomial: 0xC96C5795D7870F42
-    crc = 0xFFFFFFFFFFFFFFFF
-    poly = 0xC96C5795D7870F42
-    table = [0] * 256
-    
-    # Generate table
-    for i in range(256):
-        crc = i
-        for _ in range(8):
-            if crc & 1:
-                crc = (crc >> 1) ^ poly
-            else:
-                crc = crc >> 1
-        table[i] = crc
-        crc = 0xFFFFFFFFFFFFFFFF
-    
-    # Calculate CRC
-    crc = 0xFFFFFFFFFFFFFFFF
-    for byte in data:
-        crc = (crc >> 8) ^ table[(crc ^ byte) & 0xFF]
-    return crc ^ 0xFFFFFFFFFFFFFFFF
+# CRC64 removed for performance - using sequential naming instead
 
 # Try to add libvips bin directory to Python's DLL search path
 # This ensures pyvips can find libvips-42.dll even if PATH is not set correctly
@@ -300,55 +278,34 @@ class ImageProcessor:
             
             # Generate filename based on new naming scheme
             # Generate filename based on new naming scheme
+            # Sequential naming: {sanitized_novel_name}{index:02d}.avif
+            
+            # Sanitize EPUB title or use default
             if epub_title:
-                # Create sanitized EPUB title for hash
+                # Create sanitized EPUB title
+                # Keep alphanumeric, remove spaces/special chars
                 sanitized_title = epub_title.lower().replace(' ', '').replace('-', '').replace('_', '')
-                # Remove common words and special characters
                 sanitized_title = ''.join(c for c in sanitized_title if c.isalnum())
-                
-                # Generate CRC64 hash
-                crc64_hash = format(crc64(sanitized_title.encode()), 'X')
-                
-                # Generate sequential filename using letters (A-Z, then AA-AZ, etc.)
-                # Convert image_index to base 26 with letters
-                letter_index = image_index - 1  # 0-based
-                if letter_index < 26:
-                    letter_suffix = chr(ord('A') + letter_index)
-                else:
-                    # For indices > 26, use multiple letters (AA, AB, AC, etc.)
-                    letter_suffix = ''
-                    n = letter_index
-                    while n >= 0:
-                        letter_suffix = chr(ord('A') + (n % 26)) + letter_suffix
-                        n = n // 26 - 1
-                
-                output_filename = f"{crc64_hash}{letter_suffix}.avif"
-                
-                # Determine where to save and the HTML path
-                if is_directory_mode and central_images_folder:
-                    # Save to central images folder in directory mode
-                    output_path = central_images_folder / output_filename
-                    # Use absolute path for directory mode
-                    html_path = f"/images/{output_filename}"
-                else:
-                    # Save to EPUB output folder in single-file mode
-                    output_path = epub_output_folder / output_filename
-                    html_path = f"/images/{output_filename}"
+                # Limit length to avoid filesystem issues
+                if len(sanitized_title) > 50:
+                    sanitized_title = sanitized_title[:50]
             else:
-                # Fallback to old naming scheme if epub_title is None
-                relative_original = unquote(str(img_path.relative_to(extract_dir).as_posix()))
-                path_hash = hashlib.md5(relative_original.encode()).hexdigest()[:8]
-                original_name = img_path.stem
-                original_name = original_name.replace('/', '_').replace('\\', '_')
-                output_filename = f"{original_name}_{path_hash}.avif"
-                
-                # Determine where to save and the HTML path
-                if is_directory_mode and central_images_folder:
-                    output_path = central_images_folder / output_filename
-                    html_path = f"/images/{output_filename}"
-                else:
-                    output_path = epub_output_folder / output_filename
-                    html_path = f"/images/{output_filename}"
+                sanitized_title = "Image"
+
+            # Generate sequential filename
+            # Use 02d for padding (01, 02, ... 99, 100)
+            output_filename = f"{sanitized_title}{image_index:02d}.avif"
+            
+            # Determine where to save and the HTML path
+            if is_directory_mode and central_images_folder:
+                # Save to central images folder in directory mode
+                output_path = central_images_folder / output_filename
+                # Use absolute path for directory mode
+                html_path = f"/images/{output_filename}"
+            else:
+                # Save to EPUB output folder in single-file mode
+                output_path = epub_output_folder / output_filename
+                html_path = f"/images/{output_filename}"
             
             # Save AVIF file
             with open(output_path, 'wb') as f:
