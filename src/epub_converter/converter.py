@@ -28,7 +28,7 @@ except ImportError:
     HAS_SELECTOLAX = False
 
 from .parser import EPUBParser
-from .image_processor import ImageProcessor
+from .image import ImageProcessor
 
 class EPUBConverter:
     def __init__(self, epub_path, output_folder=None, custom_css_path=None, no_script=False, no_image=False):
@@ -43,8 +43,8 @@ class EPUBConverter:
         # Central images folder for directory conversions
         self.central_images_folder = None
         
-        template_path = Path(__file__).parent / "templates"
-        self.jinja_env = Environment(loader=FileSystemLoader(template_path))
+        assets_path = Path(__file__).parent / "assets"
+        self.jinja_env = Environment(loader=FileSystemLoader(assets_path))
         
         # Detect free-threading capabilities
         self.free_threading = self._detect_free_threading()
@@ -764,7 +764,7 @@ class EPUBConverter:
         Ensures identical HTML paths in --no-image and normal modes.
         Also extracts image dimensions for layout stability.
         """
-        from .image_processor import crc64  # reuse the exact hashing
+        from .image import crc64  # reuse the exact hashing
         path_mapping = {}
         image_metadata = {}
 
@@ -1063,7 +1063,7 @@ class EPUBConverter:
                 print(f"  Using root-level static files at {self.central_static_folder}/")
             elif not self.no_script:
                 # Single file mode: create local static folder
-                static_folder = Path(__file__).parent / "static"
+                assets_folder = Path(__file__).parent / "assets"
                 output_static_folder = epub_output_folder / "static"
                 
                 # Remove existing static folder if it exists (clean up from previous runs)
@@ -1073,7 +1073,7 @@ class EPUBConverter:
                 output_static_folder.mkdir(exist_ok=True)
                 
                 # Copy and minify CSS file
-                css_source = static_folder / "css" / "style.css"
+                css_source = assets_folder / "style.css"
                 css_dest = output_static_folder / "style.css"
                 if css_source.exists():
                     with open(css_source, 'r', encoding='utf-8') as f:
@@ -1084,7 +1084,7 @@ class EPUBConverter:
                     print(f"  Minified CSS: {len(css_content)} -> {len(minified_css)} characters")
                 
                 # Copy and minify JS file
-                js_source = static_folder / "js" / "script.js"
+                js_source = assets_folder / "script.js"
                 js_dest = output_static_folder / "script.js"
                 if js_source.exists():
                     with open(js_source, 'r', encoding='utf-8') as f:
@@ -1134,10 +1134,10 @@ class EPUBConverter:
                     self.central_static_folder.mkdir(exist_ok=True)
                     
                     # Copy static files only once at the root level
-                    static_folder = Path(__file__).parent / "static"
+                    assets_folder = Path(__file__).parent / "assets"
                     
                     # Copy and minify CSS file (always overwrite to ensure freshness)
-                    css_source = static_folder / "css" / "style.css"
+                    css_source = assets_folder / "style.css"
                     css_dest = self.central_static_folder / "style.css"
                     if css_source.exists():
                         with open(css_source, 'r', encoding='utf-8') as f:
@@ -1148,7 +1148,7 @@ class EPUBConverter:
                         print(f"  Wrote root static CSS: {css_dest} ({len(css_content)} -> {len(minified_css)} chars)")
                     
                     # Copy and minify JS file (always overwrite to ensure freshness)
-                    js_source = static_folder / "js" / "script.js"
+                    js_source = assets_folder / "script.js"
                     js_dest = self.central_static_folder / "script.js"
                     if js_source.exists():
                         with open(js_source, 'r', encoding='utf-8') as f:

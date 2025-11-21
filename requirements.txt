@@ -1,0 +1,19 @@
+# Core dependencies
+jinja2>=3.1.0
+lxml>=4.9.0
+
+# Performance optimizations
+orjson>=3.9.0
+selectolax>=0.3.0
+pyvips>=2.2.0
+pillow-simd>=9.0.0
+
+# Minification
+rjsmin>=1.2.0
+rcssmin>=1.1.0
+
+# Enhanced ZIP support
+zipfile-deflate64>=0.2.0
+
+# Numerical operations (for image processing)
+numpy>=1.24.0
