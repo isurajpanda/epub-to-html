@@ -1,3 +1,12 @@
+* {
+    -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+    background-color: var(--link-color);
+    color: var(--bg-color);
+}
+
 :root {
     --bg-color: #000000;
     --text-color: #ffffff;
@@ -468,7 +477,7 @@ img {
     width: 80px;
     height: auto;
     border-radius: 3px;
-    margin-right: 0.75rem;
+    margin: 0 0.75rem 0 0;
     object-fit: cover;
 }
 
@@ -953,6 +962,8 @@ body.dark-mode .b-fade {
     flex-grow: 1;
     overflow-y: auto;
     padding: 1rem;
+    padding-bottom: 2rem;
+    /* Add extra space at bottom */
     scrollbar-width: none;
     /* Firefox */
     -ms-overflow-style: none;
@@ -964,11 +975,11 @@ body.dark-mode .b-fade {
 }
 
 .settings-section {
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.5rem;
 }
 
 .settings-section h3 {
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.5rem 0;
     font-size: 0.9rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -981,7 +992,7 @@ body.dark-mode .b-fade {
 .font-size-control {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
+    gap: 0.75rem;
 }
 
 .font-size-preview {
@@ -1306,8 +1317,8 @@ body.dark-mode .theme-preview.nature {
 .action-btn {
     width: 100%;
     padding: 12px;
-    margin-top: 12px;
-    margin-bottom: 12px;
+    margin-top: 8px;
+    margin-bottom: 8px;
     background-color: var(--link-color);
     color: #ffffff;
     border: none;
