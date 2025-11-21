@@ -246,9 +246,10 @@ class ImageProcessor:
             img = pyvips.Image.new_from_file(str(img_path))
             
             # Resize if needed (maintain aspect ratio, max width 1080)
-            if img.width > 1080:
-                scale = 1080 / img.width
-                img = img.resize(scale)
+            # Resizing removed to keep original resolution
+            # if img.width > 1080:
+            #     scale = 1080 / img.width
+            #     img = img.resize(scale)
             
             # Analyze image
             analysis = self._analyze_image_with_pyvips(img_path)

@@ -260,7 +260,7 @@ body {
 }
 
 hr.chapter-separator {
-    margin: 3em 0;
+    margin: 3rem 0;
     border: none;
     border-top: 1px solid var(--separator-color);
 }
@@ -269,7 +269,12 @@ img {
     max-width: 100%;
     height: auto;
     display: block;
-    margin: 0 auto 1em auto;
+    margin: 1.5rem auto;
+}
+
+.content-body p {
+    margin-bottom: 1.5rem;
+    margin-top: 0;
 }
 
 /* Responsive padding adjustments for different screen sizes */
@@ -723,21 +728,18 @@ img {
 
 .image-modal-content {
     position: relative;
-    max-width: 90%;
-    max-height: calc(90% - 60px);
-    /* Leave space for close button */
+    max-width: 95%;
+    max-height: 95%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 15px;
     cursor: default;
 }
 
 .image-modal img {
     max-width: 100%;
-    max-height: calc(100% - 60px);
-    /* Leave space for close button */
+    max-height: 100%;
     object-fit: contain;
     touch-action: pinch-zoom;
     /* Enable pinch-to-zoom */
@@ -746,54 +748,41 @@ img {
 }
 
 .image-modal-close {
-    position: fixed !important;
-    bottom: 20px !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
-    background: rgba(0, 0, 0, 0.8) !important;
-    border: 1px solid rgba(255, 255, 255, 0.4) !important;
-    color: white !important;
-    padding: 10px 20px !important;
-    border-radius: 25px !important;
-    cursor: pointer !important;
-    font-size: 16px !important;
-    font-weight: bold !important;
-    transition: background-color 0.2s ease !important;
-    backdrop-filter: blur(8px) !important;
-    z-index: 3000 !important;
-    pointer-events: auto !important;
-    display: block !important;
-}
-
-.image-modal-close:hover {
-    background: rgba(0, 0, 0, 0.9) !important;
-    border-color: rgba(255, 255, 255, 0.6) !important;
-}
-
-.image-modal-close:active {
-    background: rgba(0, 0, 0, 1) !important;
+    display: none !important;
 }
 
 /* Make images clickable on mobile only */
-@media (max-width: 768px) {
-    .content-body img {
-        cursor: pointer;
-        transition: opacity 0.2s ease;
-    }
+/* Make images clickable on all devices */
+.content-body img {
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
 
-    .content-body img:hover {
-        opacity: 0.9;
-    }
+.content-body img:hover {
+    opacity: 0.9;
+}
+
+/* Disable image interaction when sidebar is open */
+#app-container.sidebar-open .content-body img,
+#app-container.settings-open .content-body img {
+    cursor: default;
+    pointer-events: none;
 }
 
 /* Hide image modal on desktop */
+/* Image modal enabled on desktop */
 @media (min-width: 769px) {
-    .image-modal {
-        display: none !important;
+    .image-modal-content {
+        max-height: 95vh;
     }
 
-    .content-body img {
-        cursor: default;
+    .image-modal img {
+        /* Let flexbox handle the height */
+        max-height: none;
+        flex: 1 1 auto;
+        min-height: 0;
+        /* Important for flex shrinking */
+        object-fit: contain;
     }
 }
 

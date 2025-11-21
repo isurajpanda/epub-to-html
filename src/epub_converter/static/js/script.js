@@ -741,7 +741,7 @@ let savedScrollPosition = 0;
 
 const openImageModal = (imageSrc, imageAlt) => {
     // Only work on mobile devices
-    if (window.innerWidth > 768) return;
+    // if (window.innerWidth > 768) return;
 
     const modal = document.getElementById('image-modal');
     const modalImage = document.getElementById('modal-image');
@@ -842,10 +842,16 @@ document.addEventListener('click', (event) => {
 // Image click handler - overlay handles TOC blocking
 document.addEventListener('click', (event) => {
     // Only work on mobile devices
-    if (window.innerWidth > 768) return;
+    // if (window.innerWidth > 768) return;
 
     const img = event.target.closest('img');
     if (!img || !img.closest('.content-body')) return;
+
+    // Check if any sidebar is open
+    const appContainer = document.getElementById('app-container');
+    if (appContainer && (appContainer.classList.contains('sidebar-open') || appContainer.classList.contains('settings-open'))) {
+        return;
+    }
 
     // Open modal - overlay will prevent this from being reached if TOC is open
     event.preventDefault();
@@ -854,17 +860,23 @@ document.addEventListener('click', (event) => {
 });
 
 // Handle modal background clicks to close
+// Handle modal background clicks to close (click anywhere outside the image)
 document.addEventListener('click', (event) => {
     const modal = document.getElementById('image-modal');
-    if (event.target === modal) {
-        closeImageModal();
+    const modalImage = document.getElementById('modal-image');
+
+    if (modal && modal.classList.contains('active')) {
+        // If the click is NOT on the image (and NOT on the content image that opened it, handled by stopPropagation), close it
+        if (!event.target.closest('#modal-image') && event.target.closest('#image-modal')) {
+            closeImageModal();
+        }
     }
 });
 
 // Handle keyboard shortcuts for modal (mobile only)
 document.addEventListener('keydown', (event) => {
     // Only work on mobile devices
-    if (window.innerWidth > 768) return;
+    // if (window.innerWidth > 768) return;
 
     const modal = document.getElementById('image-modal');
     if (!modal || !modal.classList.contains('active')) return;
@@ -1205,10 +1217,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // Close sidebar or settings when clicking on main content area if open
-    mainContent.addEventListener('click', () => {
+    mainContent.addEventListener('click', (event) => {
         if (appContainer.classList.contains('sidebar-open')) {
+            event.preventDefault();
+            event.stopPropagation();
             toggleSidebar();
         } else if (appContainer.classList.contains('settings-open')) {
+            event.preventDefault();
+            event.stopPropagation();
             toggleSettings();
         }
     });
