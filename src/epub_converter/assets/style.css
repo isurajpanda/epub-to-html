@@ -643,6 +643,26 @@ img {
     background: var(--topbar-button-hover);
 }
 
+/* Style for download anchor to match buttons */
+.top-toolbar a {
+    margin: 0 2px;
+    padding: 10px;
+    border: none;
+    background: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-color);
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.top-toolbar a:hover {
+    background: var(--topbar-button-hover);
+}
+
 .top-toolbar svg {
     width: 22px;
     height: 22px;

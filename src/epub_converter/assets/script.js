@@ -29,8 +29,11 @@ function buildTocList(items, onTocClick) {
             a.title = item.label; // Add full label as tooltip
             // Use actual anchor href for standard navigation
             a.href = item.href;
-            // Only handle mobile sidebar closing - browser handles navigation
-            a.onclick = e => { if (onTocClick) onTocClick(item); };
+            // Handle click to use custom scroll that accounts for topbar
+            a.onclick = e => {
+                e.preventDefault(); // Prevent default anchor behavior
+                if (onTocClick) onTocClick(item, e);
+            };
             li.appendChild(a);
         } else {
             const span = document.createElement('span');
@@ -52,16 +55,68 @@ function buildTocList(items, onTocClick) {
 
 // Lazy Load Generators
 
-const handleTocClick = (item) => {
-    // Only handle closing sidebar on mobile - browser handles navigation via anchor
+const handleTocClick = (item, event) => {
+    // Close sidebar on mobile
     if (window.innerWidth < 768) {
         toggleSidebar();
+    }
+
+    // Navigate to the target using custom scroll that accounts for topbar
+    if (item.href) {
+        // Extract just the hash from href (e.g., "#chapter-1")
+        const hash = item.href.includes('#') ? item.href.substring(item.href.indexOf('#') + 1) : null;
+        if (hash) {
+            const targetElement = document.getElementById(hash);
+            if (targetElement) {
+                const mainContent = document.getElementById('main-content');
+                const topbarContainer = document.getElementById('topbar-container');
+                const topbarHeight = topbarContainer ? topbarContainer.offsetHeight : 0;
+
+                // Disable scrollspy observer during navigation
+                if (window.setScrollspyNavigating) {
+                    window.setScrollspyNavigating(true);
+                }
+
+                // Account for topbar height so content at the top isn't covered
+                // On mobile, add extra padding (8px) for better visibility
+                const extraPadding = window.innerWidth <= 768 ? 8 : 0;
+                const scrollPosition = Math.max(0, targetElement.offsetTop - topbarHeight - extraPadding);
+
+                if (mainContent) {
+                    mainContent.scrollTo(0, scrollPosition);
+                }
+
+                // Update URL hash without creating history entry
+                // Always use replaceState to avoid polluting browser history
+                history.replaceState(null, null, '#' + hash);
+
+
+                // Re-enable scrollspy after a delay to let scroll settle
+                setTimeout(() => {
+                    if (window.setScrollspyNavigating) {
+                        window.setScrollspyNavigating(false);
+                    }
+                }, 500);
+            }
+        }
     }
 };
 
 const createTopbar = () => {
     const topbarContainer = document.getElementById('topbar-container');
     if (!topbarContainer) return;
+
+    // Get epub filename from metadata
+    const appDataElement = document.getElementById('app-data');
+    let epubFilename = '';
+    if (appDataElement) {
+        try {
+            const appData = JSON.parse(appDataElement.textContent);
+            epubFilename = appData.epub_filename || '';
+        } catch (e) {
+            console.error('Error parsing app data:', e);
+        }
+    }
 
     topbarContainer.innerHTML = `
         <div class="top-toolbar">
@@ -96,7 +151,7 @@ const createTopbar = () => {
                             d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z" />
                     </svg>
                 </button>
-                <button type="button" title="Download EPUB" aria-label="Download EPUB" id="download-epub">
+                ${epubFilename ? `<a href="/epub/${epubFilename}" title="Download EPUB" aria-label="Download EPUB" id="download-epub" download>
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
                         class="bi bi-download" viewBox="0 0 16 16">
                         <path
@@ -104,7 +159,7 @@ const createTopbar = () => {
                         <path
                             d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z" />
                     </svg>
-                </button>
+                </a>` : ''}
                 <button type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen"
                     id="fullscreen-toggle">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
@@ -1017,8 +1072,10 @@ const navigateChapter = (direction) => {
     }
 
     if (targetChapter) {
-        // Use CSS scroll-padding-top instead of manual calculation
-        const scrollPosition = Math.max(0, targetChapter.offsetTop);
+        // Account for topbar height so images at the top aren't covered
+        // On mobile, add a bit of extra padding (8px) for better visibility
+        const extraPadding = window.innerWidth <= 768 ? 8 : 0;
+        const scrollPosition = Math.max(0, targetChapter.offsetTop - topbarHeight - extraPadding);
         mainContent.scrollTo(0, scrollPosition);
     }
 };
@@ -1220,9 +1277,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let scrollToElement = (element, smooth = false) => {
         if (!element) return;
 
-        // Use CSS scroll-padding-top instead of manual calculation
-        // The CSS already handles the topbar offset with scroll-padding-top
-        const scrollPosition = Math.max(0, element.offsetTop);
+        const topbarContainer = document.getElementById('topbar-container');
+        const topbarHeight = topbarContainer ? topbarContainer.offsetHeight : 0;
+
+        // Account for topbar height so content at the top isn't covered
+        // On mobile, add extra padding (8px) for better visibility
+        const extraPadding = window.innerWidth <= 768 ? 8 : 0;
+        const scrollPosition = Math.max(0, element.offsetTop - topbarHeight - extraPadding);
 
         // Instant scroll without animation
         mainContent.scrollTo(0, scrollPosition);
@@ -1505,8 +1566,12 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         let currentVisibleChapter = null;
+        let isNavigating = false; // Flag to disable observer during programmatic navigation
 
         const observerCallback = (entries) => {
+            // Don't update hash if we're in the middle of programmatic navigation
+            if (isNavigating) return;
+
             // Find the most visible chapter in the viewport
             let mostVisibleEntry = null;
             let maxIntersectionRatio = 0;
@@ -1522,15 +1587,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mostVisibleEntry && mostVisibleEntry.target.id !== currentVisibleChapter) {
                 currentVisibleChapter = mostVisibleEntry.target.id;
 
-                // Update URL hash without scrolling
-                if (history.replaceState) {
-                    history.replaceState(null, null, '#' + currentVisibleChapter);
-                } else {
-                    // Fallback for older browsers
-                    window.location.hash = currentVisibleChapter;
-                }
+                // Update URL hash without creating history entry
+                // Always use replaceState to avoid polluting browser history
+                history.replaceState(null, null, '#' + currentVisibleChapter);
             }
         };
+
+        // Make isNavigating accessible to navigation functions
+        window._scrollspyNavigating = false;
+        Object.defineProperty(window, 'setScrollspyNavigating', {
+            value: (value) => {
+                isNavigating = value;
+                window._scrollspyNavigating = value;
+            }
+        });
 
         const chapterObserver = new IntersectionObserver(observerCallback, observerOptions);
 
