@@ -40,8 +40,6 @@ body {
     height: 100%;
     /* Ensure background covers full height */
     width: 100%;
-    overscroll-behavior: none;
-    /* Prevent bounce showing white background */
 }
 
 /* Hide series title when CSS is loaded - only visible as fallback */
