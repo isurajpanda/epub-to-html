@@ -1329,18 +1329,7 @@ body.dark-mode .theme-preview.nature {
 }
 
 /* Performance Optimization */
-.chapter {
-    /* Huge performance boost for large books */
-    content-visibility: auto;
-    contain-intrinsic-size: 1px 1000px;
-    /* Estimate height to prevent scrollbar jumping */
-}
 
-.chapter:first-child {
-    /* Keep first chapter visible immediately to prevent flash */
-    content-visibility: visible;
-    contain-intrinsic-size: auto;
-}
 
 /* Action Button (Bionic Reading) */
 .action-btn {

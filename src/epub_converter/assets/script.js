@@ -90,7 +90,6 @@ const handleTocClick = (item, event) => {
                 // Always use replaceState to avoid polluting browser history
                 history.replaceState(null, null, '#' + hash);
 
-
                 // Re-enable scrollspy after a delay to let scroll settle
                 setTimeout(() => {
                     if (window.setScrollspyNavigating) {
