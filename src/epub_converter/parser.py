@@ -47,7 +47,7 @@ class EPUBParser:
             'contact us', 'support page', 'help page', 'advertisement',
             'promo page', 'promotion page', 'subscribe now', 'subscription page',
             'sign up page', 'signup page', 'back matter', 'end matter',
-            'colophon', 'imprint', 'newsletter', 'copyright', 'Other Series'
+            'colophon', 'imprint', 'newsletter', 'copyright', 'copyrights', 'copyrights and credits', 'Other Series'
         ]
         
         # Pre-compile regex patterns for better performance

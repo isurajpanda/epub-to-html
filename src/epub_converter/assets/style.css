@@ -37,6 +37,11 @@ body {
     color: var(--text-color);
     font-family: serif;
     line-height: 1.6;
+    height: 100%;
+    /* Ensure background covers full height */
+    width: 100%;
+    overscroll-behavior: none;
+    /* Prevent bounce showing white background */
 }
 
 /* Hide series title when CSS is loaded - only visible as fallback */
@@ -47,6 +52,9 @@ body {
 #app-container {
     display: flex;
     height: 100vh;
+    height: 100dvh;
+    /* Use dynamic viewport height for mobile */
+    width: 100%;
     overflow: hidden;
     position: relative;
 }

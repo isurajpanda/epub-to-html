@@ -80,7 +80,8 @@ const handleTocClick = (item, event) => {
                 // Account for topbar height so content at the top isn't covered
                 // On mobile, add extra padding (8px) for better visibility
                 const extraPadding = window.innerWidth <= 768 ? 8 : 0;
-                const scrollPosition = Math.max(0, targetElement.offsetTop - topbarHeight - extraPadding);
+                // Content wrapper has margin-top, so we don't need to subtract topbarHeight
+                const scrollPosition = Math.max(0, targetElement.offsetTop - extraPadding);
 
                 if (mainContent) {
                     mainContent.scrollTo(0, scrollPosition);
@@ -1234,6 +1235,31 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
+// Handle internal links to prevent history pollution
+document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href^="#"]');
+    if (!link) return;
+
+    // If it's a TOC link, it's already handled by the specific onclick handler which calls preventDefault
+    if (event.defaultPrevented) return;
+
+    const hash = link.getAttribute('href');
+    if (hash && hash.length > 1) {
+        const targetId = hash.substring(1);
+        const targetElement = document.getElementById(targetId);
+
+        if (targetElement) {
+            event.preventDefault();
+
+            // Use the existing scrollToElement function
+            scrollToElement(targetElement);
+
+            // Update URL hash without creating history entry
+            history.replaceState(null, null, hash);
+        }
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     // Create topbar buttons
     createTopbar();
@@ -1282,7 +1308,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Account for topbar height so content at the top isn't covered
         // On mobile, add extra padding (8px) for better visibility
         const extraPadding = window.innerWidth <= 768 ? 8 : 0;
-        const scrollPosition = Math.max(0, element.offsetTop - topbarHeight - extraPadding);
+        // Content wrapper has margin-top, so we don't need to subtract topbarHeight
+        const scrollPosition = Math.max(0, element.offsetTop - extraPadding);
 
         // Instant scroll without animation
         mainContent.scrollTo(0, scrollPosition);
