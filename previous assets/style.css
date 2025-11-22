@@ -10,16 +10,16 @@
 :root {
     --bg-color: #000000;
     --text-color: #ffffff;
-    --sidebar-bg: #000000;
-    --sidebar-border: #333333;
-    --sidebar-text: #ffffff;
-    --sidebar-hover-bg: #1a1a1a;
-    --link-color: #60a5fa;
-    --link-visited: #3b82f6;
+    --sidebar-bg: #1a1a1a;
+    --sidebar-border: #333;
+    --sidebar-text: #ccc;
+    --sidebar-hover-bg: #333;
+    --link-color: #00ffff;
+    --link-visited: #00cccc;
     /* opaque topbar so content underneath isn't visible through it */
-    --topbar-bg: #000000;
-    --topbar-button-hover: #1a1a1a;
-    --separator-color: #333333;
+    --topbar-bg: #1a1a1a;
+    --topbar-button-hover: #444;
+    --separator-color: #444;
     --sidebar-width: 320px;
     --topbar-height: 48px;
     /* The nominal maximum content width; updated in larger breakpoints. */
@@ -522,15 +522,6 @@ img {
 
 .toc-view a:hover {
     background: var(--sidebar-hover-bg);
-}
-
-/* Active TOC link (current chapter) */
-.toc-view a.active {
-    background: var(--sidebar-hover-bg);
-    border-left: 3px solid var(--link-color);
-    padding-left: 9px;
-    /* 12px - 3px border = 9px to maintain alignment */
-    font-weight: 600;
 }
 
 .toc-view ul ul {

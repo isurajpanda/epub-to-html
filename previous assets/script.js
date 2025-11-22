@@ -27,10 +27,8 @@ function buildTocList(items, onTocClick) {
             const a = document.createElement('a');
             a.textContent = truncateText(item.label, 45); // Truncate TOC labels to 45 characters
             a.title = item.label; // Add full label as tooltip
-            // Use actual anchor href for standard navigation
-            a.href = item.href;
-            // Only handle mobile sidebar closing - browser handles navigation
-            a.onclick = e => { if (onTocClick) onTocClick(item); };
+            a.href = '#';
+            a.onclick = e => { e.preventDefault(); if (onTocClick) onTocClick(item); };
             li.appendChild(a);
         } else {
             const span = document.createElement('span');
@@ -50,276 +48,16 @@ function buildTocList(items, onTocClick) {
 
 // --- START: Application Logic ---
 
-// Lazy Load Generators
-
-const handleTocClick = (item) => {
-    // Only handle closing sidebar on mobile - browser handles navigation via anchor
-    if (window.innerWidth < 768) {
-        toggleSidebar();
-    }
-};
-
-const createTopbar = () => {
-    const topbarContainer = document.getElementById('topbar-container');
-    if (!topbarContainer) return;
-
-    topbarContainer.innerHTML = `
-        <div class="top-toolbar">
-            <div class="top-left-controls">
-                <button type="button" title="Show sidebar" aria-label="Show sidebar" id="sidebar-toggle">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        class="bi bi-list" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd"
-                            d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5" />
-                    </svg>
-                </button>
-                <button type="button" title="Previous Chapter" aria-label="Previous Chapter" id="prev-chapter">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        class="bi bi-arrow-left-short" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd"
-                            d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5" />
-                    </svg>
-                </button>
-                <button type="button" title="Next Chapter" aria-label="Next Chapter" id="next-chapter">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        class="bi bi-arrow-right-short" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd"
-                            d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8" />
-                    </svg>
-                </button>
-            </div>
-            <div class="top-right-controls">
-                <button id="settings-toggle" class="icon-button" aria-label="Settings">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        class="bi bi-sliders" viewBox="0 0 16 16">
-                        <path fill-rule="evenodd"
-                            d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z" />
-                    </svg>
-                </button>
-                <button type="button" title="Download EPUB" aria-label="Download EPUB" id="download-epub">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        class="bi bi-download" viewBox="0 0 16 16">
-                        <path
-                            d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5" />
-                        <path
-                            d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z" />
-                    </svg>
-                </button>
-                <button type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen"
-                    id="fullscreen-toggle">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                        class="bi bi-fullscreen" viewBox="0 0 16 16">
-                        <path
-                            d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5" />
-                    </svg>
-                </button>
-            </div>
-        </div>
-    `;
-};
-
-
-const createSidebar = (metadata) => {
-    const sidebarContainer = document.createElement('aside');
-    sidebarContainer.id = 'sidebar-container';
-    sidebarContainer.innerHTML = `
-        <div class="toc-sidebar">
-            <div class="toc-sidebar-header">
-                ${metadata.cover_image_url ? `<img id="book-cover" src="${metadata.cover_image_url}" alt="Book cover" loading="lazy">` : `<img id="book-cover" src="" alt="Book cover" style="display: none;">`}
-                <div class="book-info">
-                    <h1 id="book-title" style="${metadata.title ? '' : 'display: none;'}">${metadata.title ? truncateText(metadata.title, 60) : ''}</h1>
-                    <p id="book-author" style="${metadata.author ? '' : 'display: none;'}">${metadata.author ? truncateText(metadata.author, 40) : ''}</p>
-                </div>
-            </div>
-            <div class="toc-view" id="toc-list">
-            </div>
-        </div>
-    `;
-    document.getElementById('app-container').appendChild(sidebarContainer);
-
-    // Populate TOC
-    const tocList = document.getElementById('toc-list');
-    if (metadata.toc && tocList) {
-        tocList.appendChild(buildTocList(metadata.toc, handleTocClick));
-    }
-
-    // Add title tooltips
-    if (metadata.title) document.getElementById('book-title').title = metadata.title;
-    if (metadata.author) document.getElementById('book-author').title = metadata.author;
-
-    return sidebarContainer;
-};
-
-const createSettingsPanel = () => {
-    const settingsContainer = document.createElement('aside');
-    settingsContainer.id = 'settings-sidebar-container';
-    settingsContainer.innerHTML = `
-        <div class="settings-sidebar">
-            <div class="settings-header">
-                <h2>Reader Settings</h2>
-                <button id="settings-close" aria-label="Close settings">×</button>
-            </div>
-            <div class="settings-content">
-                <!-- Font Size Section -->
-                <div class="settings-section">
-                    <div class="font-size-control">
-                        <div id="font-size-preview" class="font-size-preview">Lorem ipsum</div>
-
-                        <!-- Bionic Reading Button -->
-                        <div style="margin-top: 1rem; margin-bottom: 1rem;">
-                            <button id="bionic-reading-toggle" class="font-option" data-no-bionic="true"
-                                style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-                                <span>Bionic Reading</span>
-                            </button>
-                        </div>
-
-                        <h3>Font Size</h3>
-                        <div class="slider-container">
-                            <span class="size-label small">A</span>
-                            <input type="range" id="font-size-slider" min="12" max="40" step="2" value="18"
-                                aria-label="Font size">
-                            <span class="size-label large">A</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Font Family Section -->
-                <div class="settings-section">
-                    <h3>Font Family</h3>
-                    <div class="font-family-grid">
-                        <button class="font-option active" data-font="original"
-                            style="font-family: serif;">Original</button>
-                        <button class="font-option" data-font="sans-serif"
-                            style="font-family: sans-serif;">Sans</button>
-                        <button class="font-option" data-font="arial"
-                            style="font-family: Arial, sans-serif;">Arial</button>
-                        <button class="font-option" data-font="verdana"
-                            style="font-family: Verdana, sans-serif;">Verdana</button>
-                        <button class="font-option" data-font="georgia"
-                            style="font-family: Georgia, serif;">Georgia</button>
-                        <button class="font-option" data-font="comic-sans"
-                            style="font-family: 'Comic Sans MS', cursive;">Comic</button>
-                    </div>
-
-
-                    <div class="setting-group">
-                        <div class="theme-header">
-                            <h3>Theme</h3>
-                            <div class="mode-toggle">
-                                <span class="mode-label">Light</span>
-                                <label class="switch">
-                                    <input type="checkbox" id="theme-mode-toggle" aria-label="Toggle Dark Mode">
-                                    <span class="slider round"></span>
-                                </label>
-                                <span class="mode-label">Dark</span>
-                            </div>
-                        </div>
-                        <div class="theme-options">
-                            <button class="theme-option active" data-theme="classic" aria-label="Classic theme">
-                                <div class="theme-preview classic"></div>
-                                <span>Classic</span>
-                            </button>
-                            <button class="theme-option" data-theme="vintage" aria-label="Vintage theme">
-                                <div class="theme-preview vintage"></div>
-                                <span>Vintage</span>
-                            </button>
-                            <button class="theme-option" data-theme="lipstick" aria-label="Lipstick theme">
-                                <div class="theme-preview lipstick"></div>
-                                <span>Lipstick</span>
-                            </button>
-                            <button class="theme-option" data-theme="ocean" aria-label="Ocean theme">
-                                <div class="theme-preview ocean"></div>
-                                <span>Ocean</span>
-                            </button>
-                            <button class="theme-option" data-theme="cyber" aria-label="Cyber theme">
-                                <div class="theme-preview cyber"></div>
-                                <span>Cyber</span>
-                            </button>
-                            <button class="theme-option" data-theme="nature" aria-label="Nature theme">
-                                <div class="theme-preview nature"></div>
-                                <span>Nature</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.getElementById('app-container').appendChild(settingsContainer);
-
-    // Initialize settings logic now that elements exist
-    initSettings();
-
-    return settingsContainer;
-};
-
-const createImageModal = () => {
-    const modal = document.createElement('div');
-    modal.id = 'image-modal';
-    modal.className = 'image-modal';
-    modal.innerHTML = `
-        <div class="image-modal-content">
-            <img id="modal-image" src="" alt="Image">
-            <button id="modal-close" class="image-modal-close" title="Close">×</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
-    return modal;
-};
-
-const createSidebarOverlay = () => {
-    if (document.getElementById('sidebar-overlay')) return;
-
-    const overlay = document.createElement('div');
-    overlay.id = 'sidebar-overlay';
-    overlay.className = 'sidebar-overlay';
-    document.body.appendChild(overlay);
-
-    // Add click listener to close panels
-    overlay.addEventListener('click', (event) => {
-        // Don't close if clicking on the sidebar itself (though overlay should be behind it)
-        if (event.target.closest('#sidebar-container') || event.target.closest('#settings-sidebar-container')) {
-            return;
-        }
-
-        // Close any open panel when overlay is clicked
-        const appContainer = document.getElementById('app-container');
-        if (appContainer) {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (appContainer.classList.contains('sidebar-open')) {
-                toggleSidebar();
-            } else if (appContainer.classList.contains('settings-open')) {
-                toggleSettings();
-            }
-        }
-    });
-};
-
-
+// Define handlers that work immediately
 // Define handlers that work immediately
 const togglePanel = (panelType) => {
     const appContainer = document.getElementById('app-container');
-
-    // Ensure overlay exists
-    createSidebarOverlay();
-    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const sidebarOverlay = document.querySelector('.sidebar-overlay');
 
     if (!appContainer) return;
 
     const isSidebar = panelType === 'sidebar';
     const isSettings = panelType === 'settings';
-
-    // Lazy load panels if they don't exist
-    if (isSidebar && !document.getElementById('sidebar-container')) {
-        const appData = JSON.parse(document.getElementById('app-data').textContent);
-        createSidebar(appData);
-    }
-
-    if (isSettings && !document.getElementById('settings-sidebar-container')) {
-        createSettingsPanel();
-    }
 
     const targetClass = isSidebar ? 'sidebar-open' : 'settings-open';
     const otherClass = isSidebar ? 'settings-open' : 'sidebar-open';
@@ -331,31 +69,22 @@ const togglePanel = (panelType) => {
 
     // Toggle the target panel
     const isOpening = !appContainer.classList.contains(targetClass);
+    appContainer.classList.toggle(targetClass);
 
-    // Force a reflow before adding class to ensure transition plays if we just created it
-    if (isOpening && ((isSidebar && !document.getElementById('sidebar-container').offsetHeight) || (isSettings && !document.getElementById('settings-sidebar-container').offsetHeight))) {
-        // void
-    }
-
-    // Small delay to allow DOM insertion to complete if just created
-    requestAnimationFrame(() => {
-        appContainer.classList.toggle(targetClass);
-
-        // Handle overlay for mobile
-        if (window.innerWidth <= 768) {
-            if (sidebarOverlay) {
-                if (isOpening) {
-                    sidebarOverlay.classList.add('active');
-                } else {
-                    // Only remove overlay if no panels are open
-                    if (!appContainer.classList.contains('sidebar-open') &&
-                        !appContainer.classList.contains('settings-open')) {
-                        sidebarOverlay.classList.remove('active');
-                    }
+    // Handle overlay for mobile
+    if (window.innerWidth <= 768) {
+        if (sidebarOverlay) {
+            if (isOpening) {
+                sidebarOverlay.classList.add('active');
+            } else {
+                // Only remove overlay if no panels are open
+                if (!appContainer.classList.contains('sidebar-open') &&
+                    !appContainer.classList.contains('settings-open')) {
+                    sidebarOverlay.classList.remove('active');
                 }
             }
         }
-    });
+    }
 };
 
 const toggleSidebar = () => togglePanel('sidebar');
@@ -366,7 +95,7 @@ const toggleSettings = () => togglePanel('settings');
 const updateFontSize = (size) => {
     const contentBody = document.querySelector('.content-body');
     const slider = document.getElementById('font-size-slider');
-    if (!contentBody) return; // Slider might not exist yet if settings not opened
+    if (!contentBody || !slider) return;
 
     // Size mapping: 1=xs, 2=base, 3=lg, 4=xl, 5=2xl
     const sizeClasses = ['text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl'];
@@ -381,7 +110,7 @@ const updateFontSize = (size) => {
     }
 
     // Update slider value if needed (e.g. on load)
-    if (slider && slider.value !== size) slider.value = size;
+    if (slider.value !== size) slider.value = size;
 
     // Update preview text size
     const preview = document.getElementById('font-size-preview');
@@ -426,13 +155,10 @@ const updateFontFamily = (font) => {
     }
 
     // Update active state in UI (only for font family buttons)
-    const buttons = document.querySelectorAll('.font-option[data-font]');
-    if (buttons.length > 0) {
-        buttons.forEach(btn => {
-            if (btn.dataset.font === font) btn.classList.add('active');
-            else btn.classList.remove('active');
-        });
-    }
+    document.querySelectorAll('.font-option[data-font]').forEach(btn => {
+        if (btn.dataset.font === font) btn.classList.add('active');
+        else btn.classList.remove('active');
+    });
 
     // localStorage removed - no storage
 };
@@ -854,17 +580,13 @@ const initSettings = () => {
     };
 
     if (fontSizeSlider) {
-        // Remove existing listeners to avoid duplicates if called multiple times
-        const newSlider = fontSizeSlider.cloneNode(true);
-        fontSizeSlider.parentNode.replaceChild(newSlider, fontSizeSlider);
-
-        newSlider.addEventListener('input', (e) => {
+        fontSizeSlider.addEventListener('input', (e) => {
             setFontSize(e.target.value);
         });
 
         // Load saved font size or use default (18px) - localStorage removed
         const savedSize = '18';
-        newSlider.value = savedSize;
+        fontSizeSlider.value = savedSize;
         setFontSize(savedSize);
     }
 
@@ -878,12 +600,8 @@ const initSettings = () => {
 
     // Theme Family Listeners
     document.querySelectorAll('.theme-option').forEach(button => {
-        // Clone to remove old listeners
-        const newBtn = button.cloneNode(true);
-        button.parentNode.replaceChild(newBtn, button);
-
-        newBtn.addEventListener('click', () => {
-            currentThemeFamily = newBtn.dataset.theme;
+        button.addEventListener('click', () => {
+            currentThemeFamily = button.dataset.theme;
             updateTheme();
         });
     });
@@ -891,10 +609,7 @@ const initSettings = () => {
     // Theme Mode Toggle Listener
     const modeToggle = document.getElementById('theme-mode-toggle');
     if (modeToggle) {
-        const newToggle = modeToggle.cloneNode(true);
-        modeToggle.parentNode.replaceChild(newToggle, modeToggle);
-
-        newToggle.addEventListener('change', (e) => {
+        modeToggle.addEventListener('change', (e) => {
             currentThemeMode = e.target.checked ? 'dark' : 'light';
             updateTheme();
         });
@@ -902,11 +617,8 @@ const initSettings = () => {
 
     // Font Family Listeners (exclude Bionic button)
     document.querySelectorAll('.font-option[data-font]').forEach(button => {
-        const newBtn = button.cloneNode(true);
-        button.parentNode.replaceChild(newBtn, button);
-
-        newBtn.addEventListener('click', () => {
-            updateFontFamily(newBtn.dataset.font);
+        button.addEventListener('click', () => {
+            updateFontFamily(button.dataset.font);
         });
     });
 
@@ -914,6 +626,7 @@ const initSettings = () => {
     const bionicToggle = document.getElementById('bionic-reading-toggle');
     if (bionicToggle) {
         // Click handled by global listener
+
         // Initialize state - localStorage removed
         // Default to bionic reading off
     }
@@ -1029,11 +742,6 @@ let savedScrollPosition = 0;
 const openImageModal = (imageSrc, imageAlt) => {
     // Only work on mobile devices
     // if (window.innerWidth > 768) return;
-
-    // Lazy load modal if needed
-    if (!document.getElementById('image-modal')) {
-        createImageModal();
-    }
 
     const modal = document.getElementById('image-modal');
     const modalImage = document.getElementById('modal-image');
@@ -1179,28 +887,24 @@ document.addEventListener('keydown', (event) => {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Create topbar buttons
-    createTopbar();
-
-    // Initialize settings - MOVED to lazy load
-    // initSettings();
+    // Initialize settings
+    initSettings();
 
     const APP_DATA = JSON.parse(document.getElementById('app-data').textContent);
 
-    // Remove loading state from TOC button - NO LONGER NEEDED since topbar is generated fresh
-    // const sidebarToggle = document.getElementById('sidebar-toggle');
-    // if (sidebarToggle) {
-    //     sidebarToggle.classList.remove('button-loading');
-    //     sidebarToggle.classList.remove('loading-spinner');
-    //     sidebarToggle.title = 'Show sidebar';
-    //     sidebarToggle.setAttribute('aria-label', 'Show sidebar');
-    //     // Remove loading spinner class from SVG
-    //     const svg = sidebarToggle.querySelector('svg');
-    //     if (svg) {
-    //         svg.classList.remove('loading-spinner');
-    //     }
-    // }
-
+    // Remove loading state from TOC button
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle) {
+        sidebarToggle.classList.remove('button-loading');
+        sidebarToggle.classList.remove('loading-spinner');
+        sidebarToggle.title = 'Show sidebar';
+        sidebarToggle.setAttribute('aria-label', 'Show sidebar');
+        // Remove loading spinner class from SVG
+        const svg = sidebarToggle.querySelector('svg');
+        if (svg) {
+            svg.classList.remove('loading-spinner');
+        }
+    }
 
     // No redirect - / stays as /
     let isRedirected = false;
@@ -1210,11 +914,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Get DOM elements first
     const appContainer = document.getElementById('app-container');
-    // const sidebarContainer = document.getElementById('sidebar-container'); // REMOVED - lazy loaded
+    const sidebarContainer = document.getElementById('sidebar-container');
     const topbarContainer = document.getElementById('topbar-container');
     const mainContent = document.getElementById('main-content');
 
-    // Close panels when clicking on the overlay shield - MOVED to createSidebarOverlay
+    // Close panels when clicking on the overlay shield
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', (event) => {
+            // Don't close if clicking on the sidebar itself (though overlay should be behind it)
+            if (event.target.closest('#sidebar-container') || event.target.closest('#settings-sidebar-container')) {
+                return;
+            }
+
+            // Close any open panel when overlay is clicked
+            const appContainer = document.getElementById('app-container');
+            if (appContainer) {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (appContainer.classList.contains('sidebar-open')) {
+                    toggleSidebar();
+                } else if (appContainer.classList.contains('settings-open')) {
+                    toggleSettings();
+                }
+            }
+        });
+    }
 
     // Utility function for instant navigation without scrolling
     let scrollToElement = (element, smooth = false) => {
@@ -1375,7 +1101,43 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('focus', handleFullscreenChange);
     window.addEventListener('resize', handleFullscreenChange);
 
+    const handleTocClick = (item) => {
+        if (!item.href) return;
 
+        // Extract page ID from href (should now be in format "#page01", "#page02", etc.)
+        let pageId = item.href;
+
+        // Remove leading # if present
+        if (pageId.startsWith('#')) {
+            pageId = pageId.substring(1);
+        }
+
+        // Look for target element with the page ID
+        let targetElement = document.getElementById(pageId);
+
+        // If not found, try to find the closest chapter
+        if (!targetElement) {
+            // Try to find any chapter element that might be close
+            const chapterElements = document.querySelectorAll('.chapter');
+            if (chapterElements.length > 0) {
+                // Use the first chapter as fallback
+                targetElement = chapterElements[0];
+                pageId = targetElement.id;
+            }
+        }
+
+        if (targetElement) {
+            // Update URL hash to show current page
+            history.replaceState(null, '', '#' + pageId);
+            scrollToElement(targetElement, false);
+        } else {
+            // Could not find target element
+        }
+
+        if (window.innerWidth < 768) {
+            toggleSidebar();
+        }
+    };
 
     // --- Keyboard Controls (optimized) ---
     const handleKeyDown = (event) => {
@@ -1417,10 +1179,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', handleKeyDown, { passive: false });
 
     // --- UI Initialization ---
-    // initSettings(); // REMOVED - lazy loaded
+    initSettings();
 
-    // Populate TOC sidebar with data - REMOVED - lazy loaded
-    /*
+    // Populate TOC sidebar with data
     const bookCover = document.getElementById('book-cover');
     const bookTitle = document.getElementById('book-title');
     const bookAuthor = document.getElementById('book-author');
@@ -1453,30 +1214,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (APP_DATA.toc && tocList) {
         tocList.appendChild(buildTocList(APP_DATA.toc, handleTocClick));
     }
-    */
-
-    // Function to update active TOC link based on current hash
-    const updateActiveTocLink = () => {
-        const hash = window.location.hash;
-        if (!hash) return;
-
-        // Remove active class from all TOC links
-        const allTocLinks = document.querySelectorAll('.toc-view a');
-        allTocLinks.forEach(link => link.classList.remove('active'));
-
-        // Add active class to the link that matches the current hash
-        const activeLink = document.querySelector(`.toc-view a[href="${hash}"]`);
-        if (activeLink) {
-            activeLink.classList.add('active');
-        }
-    };
-
-    // Update active link on hash change
-    window.addEventListener('hashchange', updateActiveTocLink);
-
-    // Update active link on initial load
-    updateActiveTocLink();
-
 
 
     // Close sidebar or settings when clicking on main content area if open
@@ -1549,6 +1286,21 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 scrollToElement(targetElement, false);
             }, 100);
+        }
+    }
+});
+
+// Fallback: Remove loading state when window is fully loaded
+window.addEventListener('load', () => {
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (sidebarToggle && sidebarToggle.classList.contains('button-loading')) {
+        sidebarToggle.classList.remove('button-loading');
+        sidebarToggle.classList.remove('loading-spinner');
+        sidebarToggle.title = 'Show sidebar';
+        sidebarToggle.setAttribute('aria-label', 'Show sidebar');
+        const svg = sidebarToggle.querySelector('svg');
+        if (svg) {
+            svg.classList.remove('loading-spinner');
         }
     }
 });

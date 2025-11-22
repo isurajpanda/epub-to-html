@@ -658,7 +658,8 @@ class EPUBConverter:
         return body_content
 
     def _map_toc_to_chapters(self, toc, content_id_mapping):
-        """Map TOC entries to correct chapter IDs based on content file mapping."""
+        """Map TOC entries to correct chapter IDs based on content file mapping.
+        Filtered TOC items (like Copyright, Yen Press) are removed from the TOC."""
         def process_toc_item(item):
             if 'href' in item:
                 original_href = item['href']
@@ -690,27 +691,30 @@ class EPUBConverter:
                 chapter_id = self._find_closest_chapter_match(file_path, content_id_mapping)
             
             if chapter_id:
+                # User requested to map strictly to #page{pagenumber} to ensure app navigation works
+                # We ignore fragments (like #link_006) which might be broken or cause issues
+                item['href'] = f"#{chapter_id}"
                 if fragment:
-                    # Use the fragment as the target ID to allow deep linking
-                    item['href'] = f"#{fragment}"
-                    # Note: This assumes the fragment ID is unique across the entire book.
-                    # If not, it might jump to the wrong chapter. But this is better than
-                    # always jumping to the top of the chapter for specific section links.
-                    print(f"    Mapped TOC with fragment: {item['label']} -> {item['href']}")
+                    print(f"    Mapped TOC (ignoring fragment #{fragment}): {item['label']} -> {item['href']}")
                 else:
-                    item['href'] = f"#{chapter_id}"
                     print(f"    Mapped TOC: {item['label']} -> {item['href']}")
-            else:
-                print(f"    Warning: Could not map TOC entry: {item['label']} ({original_href})")
-                item['href'] = "#page01"  # Default to first page
                 
                 # Process children recursively
                 if 'children' in item:
-                    item['children'] = [process_toc_item(child) for child in item['children']]
-            
-            return item
+                    children = [process_toc_item(child) for child in item['children']]
+                    # Filter out None values (filtered children)
+                    item['children'] = [child for child in children if child is not None]
+                
+                return item
+            else:
+                # This TOC entry was filtered out (e.g., Copyright, Yen Press)
+                # Return None to indicate it should be removed from TOC
+                print(f"    Filtered TOC entry: {item['label']} ({original_href})")
+                return None
         
-        return [process_toc_item(item) for item in toc]
+        # Process all TOC items and filter out None values (filtered items)
+        mapped_toc = [process_toc_item(item) for item in toc]
+        return [item for item in mapped_toc if item is not None]
 
     def _find_closest_chapter_match(self, file_path, content_id_mapping):
         """Find the closest matching chapter for a file path."""
