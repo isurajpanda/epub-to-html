@@ -244,14 +244,14 @@ const createSettingsPanel = () => {
                     <div class="font-family-grid">
                         <button class="font-option active" data-font="original"
                             style="font-family: serif;">Original</button>
-                        <button class="font-option" data-font="sans-serif"
-                            style="font-family: sans-serif;">Sans</button>
+                        <button class="font-option" data-font="montserrat"
+                            style="font-family: 'Montserrat', sans-serif;">Montserrat</button>
                         <button class="font-option" data-font="arial"
                             style="font-family: Arial, sans-serif;">Arial</button>
                         <button class="font-option" data-font="verdana"
                             style="font-family: Verdana, sans-serif;">Verdana</button>
-                        <button class="font-option" data-font="georgia"
-                            style="font-family: Georgia, serif;">Georgia</button>
+                        <button class="font-option" data-font="roboto-condensed"
+                            style="font-family: 'Roboto Condensed', sans-serif;">Roboto</button>
                         <button class="font-option" data-font="comic-sans"
                             style="font-family: 'Comic Sans MS', cursive;">Comic</button>
                     </div>
@@ -452,21 +452,50 @@ const updateFontSize = (size) => {
     // localStorage removed - no storage
 };
 
+// Lazy load Google Fonts
+const loadedFonts = new Set();
+
+const loadGoogleFont = (fontName) => {
+    if (loadedFonts.has(fontName)) return;
+
+    let fontUrl = '';
+    if (fontName === 'montserrat') {
+        fontUrl = 'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap';
+    } else if (fontName === 'roboto-condensed') {
+        fontUrl = 'https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap';
+    }
+
+    if (fontUrl) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = fontUrl;
+        document.head.appendChild(link);
+        loadedFonts.add(fontName);
+    }
+};
+
 const updateFontFamily = (font) => {
     const contentBody = document.querySelector('.content-body');
     const fontSizePreview = document.getElementById('font-size-preview');
 
     if (!contentBody) return;
 
+    // Lazy load Google Fonts if needed
+    if (font === 'montserrat' || font === 'roboto-condensed') {
+        loadGoogleFont(font);
+    }
+
     let fontFamily = '';
     if (font === 'original') {
-        fontFamily = '';
-    } else if (font === 'georgia') {
-        fontFamily = 'Georgia, serif';
+        fontFamily = 'serif';
+    } else if (font === 'montserrat') {
+        fontFamily = "'Montserrat', sans-serif";
     } else if (font === 'arial') {
         fontFamily = 'Arial, sans-serif';
     } else if (font === 'verdana') {
         fontFamily = 'Verdana, sans-serif';
+    } else if (font === 'roboto-condensed') {
+        fontFamily = "'Roboto Condensed', sans-serif";
     } else if (font === 'comic-sans') {
         fontFamily = "'Comic Sans MS', cursive";
     } else {
