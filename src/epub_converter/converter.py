@@ -747,6 +747,22 @@ class EPUBConverter:
             css_content = self.css_whitespace_pattern.sub(' ', css_content)
             return css_content.strip()
 
+    def _minify_html(self, html_content):
+        """Minify HTML by removing comments, line breaks, and extra whitespace."""
+        # Remove HTML comments (but preserve conditional comments for IE)
+        html_content = re.sub(r'<!--(?!\[if\s).*?-->', '', html_content, flags=re.DOTALL)
+        
+        # Remove line breaks and carriage returns
+        html_content = html_content.replace('\n', ' ').replace('\r', '')
+        
+        # Remove extra whitespace (multiple spaces to single space)
+        html_content = re.sub(r'\s+', ' ', html_content)
+        
+        # Remove whitespace around tags (but preserve space in text content)
+        html_content = re.sub(r'>\s+<', '><', html_content)
+        
+        return html_content.strip()
+
     def _minify_js(self, js_content):
         """Minify JavaScript using rjsmin library."""
         minified = ""
@@ -1130,6 +1146,9 @@ class EPUBConverter:
 
             combined_html = self.combine_and_generate_html(content_files, extract_dir, metadata, path_mapping, custom_css, image_metadata=locals().get('image_metadata'))
             final_html = self.fix_links_and_images(combined_html, content_id_mapping)
+            
+            # Minify HTML: remove comments, line breaks, and extra whitespace
+            final_html = self._minify_html(final_html)
             
             output_html = epub_output_folder / "index.html"
             with open(output_html, 'w', encoding='utf-8') as f:
