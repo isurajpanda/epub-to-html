@@ -493,6 +493,21 @@ class EPUBConverter:
                                     replaced_tag = replaced_tag[:-2] + f' width="{width}" height="{height}" />'
                                 else:
                                     replaced_tag = replaced_tag[:-1] + f' width="{width}" height="{height}">'
+                
+                # Add onerror attribute for CDN fallback
+                # Extract the filename from the src to construct the CDN URL
+                src_match = self.img_src_extract_pattern.search(replaced_tag)
+                if src_match:
+                    image_src = src_match.group(1)
+                    # Extract just the filename (e.g., "/images/8f7587ac-09.avif" -> "8f7587ac-09.avif")
+                    image_filename = Path(image_src).name
+                    cdn_url = f"https://images.lnori.qzz.io/{image_filename}"
+                    
+                    # Add onerror attribute before the closing tag
+                    if replaced_tag.endswith('/>'):
+                        replaced_tag = replaced_tag[:-2] + f' onerror="this.onerror=null; this.src=\'{cdn_url}\';" />'
+                    elif replaced_tag.endswith('>'):
+                        replaced_tag = replaced_tag[:-1] + f' onerror="this.onerror=null; this.src=\'{cdn_url}\';">'
 
                 return replaced_tag
 
