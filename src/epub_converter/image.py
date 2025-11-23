@@ -276,25 +276,18 @@ class ImageProcessor:
                 complexity_level = "high" if quality == 85 else "medium" if quality == 80 else "low"
                 print(f"Detected {complexity_level} complexity color image: {img_path.name}, using {quality}% compression")
             
-            # Generate filename based on new naming scheme
-            # Generate filename based on new naming scheme
-            # Sequential naming: {sanitized_novel_name}{index:02d}.avif
+            # Generate filename based on CRC32 checksum
+            # New naming scheme: {crc32}-{index:02d}.avif
             
-            # Sanitize EPUB title or use default
-            if epub_title:
-                # Create sanitized EPUB title
-                # Keep alphanumeric, remove spaces/special chars
-                sanitized_title = epub_title.lower().replace(' ', '').replace('-', '').replace('_', '')
-                sanitized_title = ''.join(c for c in sanitized_title if c.isalnum())
-                # Limit length to avoid filesystem issues
-                if len(sanitized_title) > 50:
-                    sanitized_title = sanitized_title[:50]
-            else:
-                sanitized_title = "Image"
-
-            # Generate sequential filename
+            # Calculate CRC32 checksum of the original image file
+            import zlib
+            with open(img_path, 'rb') as f:
+                file_content = f.read()
+                crc32_value = zlib.crc32(file_content) & 0xffffffff  # Ensure unsigned 32-bit value
+            
+            # Generate filename with CRC32
             # Use 02d for padding (01, 02, ... 99, 100)
-            output_filename = f"{sanitized_title}{image_index:02d}.avif"
+            output_filename = f"{crc32_value:08x}-{image_index:02d}.avif"
             
             # Determine where to save and the HTML path
             if is_directory_mode and central_images_folder:

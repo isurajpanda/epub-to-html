@@ -859,15 +859,6 @@ class EPUBConverter:
         path_mapping = {}
         image_metadata = {}
 
-        # Title-based sanitization for sequential naming
-        epub_title = (metadata or {}).get('title', 'Unknown') or 'Unknown'
-        sanitized_title = epub_title.lower().replace(' ', '').replace('-', '').replace('_', '')
-        sanitized_title = ''.join(c for c in sanitized_title if c.isalnum())
-        if len(sanitized_title) > 50:
-            sanitized_title = sanitized_title[:50]
-        if not sanitized_title:
-            sanitized_title = "Image"
-
         # Build ordered, de-duplicated list of referenced images (reading order)
         ordered_images = []  # store tuples (relative_to_extract_dir, original_src, filename)
         seen = set()
@@ -918,21 +909,13 @@ class EPUBConverter:
             except Exception:
                 pass
 
-        # Map images: cover -> {sanitized_novel_name}{index}.avif
+        # Map images using CRC32-based naming to match ImageProcessor
         # IMPORTANT: Normal mode (ImageProcessor) does NOT special-case the cover filename.
         # It uses the same naming scheme for all images.
         # We must match that behavior here.
         
-        epub_title = metadata.get('title')
-        if epub_title:
-            # Create sanitized EPUB title
-            sanitized_title = epub_title.lower().replace(' ', '').replace('-', '').replace('_', '')
-            sanitized_title = ''.join(c for c in sanitized_title if c.isalnum())
-            if len(sanitized_title) > 50:
-                sanitized_title = sanitized_title[:50]
-        else:
-            sanitized_title = "Image"
-            
+        import zlib
+        
         image_index = 1
 
         for rel, original_src, filename, abs_path in ordered_images:
@@ -941,8 +924,18 @@ class EPUBConverter:
             if cover_rel and rel == cover_rel:
                 is_cover = True
 
-            # Generate sequential filename: {sanitized_title}{index:02d}.avif
-            output_filename = f"{sanitized_title}{image_index:02d}.avif"
+            # Calculate CRC32 checksum of the image file to match ImageProcessor naming
+            try:
+                with open(abs_path, 'rb') as f:
+                    file_content = f.read()
+                    crc32_value = zlib.crc32(file_content) & 0xffffffff  # Ensure unsigned 32-bit value
+                
+                # Generate CRC32-based filename: {crc32}-{index:02d}.avif
+                output_filename = f"{crc32_value:08x}-{image_index:02d}.avif"
+            except Exception as e:
+                print(f"    Warning: Could not calculate CRC32 for {filename}: {e}")
+                # Fallback to index-only naming if CRC32 calculation fails
+                output_filename = f"image-{image_index:02d}.avif"
             html_path = f"/images/{output_filename}"
             
             # If it's cover, store the filename for metadata update
