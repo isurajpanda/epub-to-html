@@ -1,0 +1,31 @@
+// Fixed TOC navigation - use getBoundingClientRect for accurate scroll positioning
+const handleTocClick = (item, event) => {
+    if (window.innerWidth < 768) toggleSidebar();
+
+    if (item.href) {
+        const hash = item.href.includes('#') ? item.href.substring(item.href.indexOf('#') + 1) : null;
+        if (hash) {
+            const targetElement = document.getElementById(hash);
+            if (targetElement) {
+                if (window.setScrollspyNavigating) window.setScrollspyNavigating(true);
+
+                const mainContent = document.getElementById('main-content');
+                const extraPadding = window.innerWidth <= 768 ? 8 : 0;
+
+                // Calculate position relative to main-content, not offsetParent
+                const mainContentRect = mainContent.getBoundingClientRect();
+                const targetRect = targetElement.getBoundingClientRect();
+                const currentScroll = mainContent.scrollTop;
+                const topPos = currentScroll + (targetRect.top - mainContentRect.top) - extraPadding;
+                
+                mainContent.scrollTo({ top: topPos, behavior: 'auto' });
+
+                history.replaceState(null, null, '#' + hash);
+
+                setTimeout(() => {
+                    if (window.setScrollspyNavigating) window.setScrollspyNavigating(false);
+                }, 100);
+            }
+        }
+    }
+};
