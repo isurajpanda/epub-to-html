@@ -41,7 +41,8 @@ body {
 }
 
 /* --- Layout Containers --- */
-.series-title {
+.table-of-content,
+.chapter-title {
     display: none
 }
 
@@ -121,6 +122,12 @@ body {
 }
 
 /* --- Content Styling --- */
+.chapter {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 1000px;
+    contain: layout paint style
+}
+
 .content-body {
     max-width: min(48rem, 90vw);
     width: 100%;
@@ -747,6 +754,10 @@ body.dark-mode .theme-preview.nature {
 }
 
 /* Bionic */
+.bionic-active .bionic-wrapper {
+    display: inline
+}
+
 .b-word {
     display: inline-block;
     margin-right: .25em
@@ -1081,4 +1092,46 @@ body.dark-mode .b-fade {
     #app-container.settings-open .top-right-controls {
         transform: translateX(calc(var(--sidebar-width)*-1))
     }
+}
+
+/* Sidebar Overlay (JS Controlled) */
+.sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, .5);
+    z-index: 1150;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .3s ease, visibility .3s ease;
+    backdrop-filter: blur(2px);
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Mobile specific sidebar behavior */
+@media(max-width:768px) {
+
+    /* Ensure overlay is above everything except sidebar when active */
+    .sidebar-overlay.active {
+        display: block;
+        z-index: 1150;
+    }
+
+    /* Top controls do not shift on mobile */
+    #app-container.sidebar-open .top-left-controls {
+        transform: none !important;
+    }
+}
+
+@media(min-width:769px) {
+    /* On desktop, the overlay is only for settings, not standard sidebar (unless requested, but existing pattern suggests distinct behavior) */
+    /* Actually, createSidebarOverlay in script.js is generic. */
+    /* If we want desktop to NOT have overlay for left sidebar, we hide it or scope it. */
+    /* However, existing behavior allowed clicking outside settings. */
+    /* Let's keep it general but maybe specific logic in JS determines when to show it. */
+    /* For now, just style it. */
 }

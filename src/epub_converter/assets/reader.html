@@ -4,10 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="public, max-age=31536000">
     <meta name="robots" content="index, follow">
     <title>{{ title }}</title>
-
     <meta name="description"
         content="{% if metadata.get('description') and metadata.get('description') != 'None' %}{{ metadata.get('description') }}{% else %}Read {{ title }} online. A digital book reader with optimized viewing experience.{% endif %}">
     <meta name="author" content="{{ metadata.get('author', 'Unknown') }}">
@@ -50,15 +48,51 @@
 </head>
 
 <body class="">
-    <h1 id="series-title" class="series-title">{{ title }}</h1>
+
+    <!-- Previous raw-data-container is effectively integrated into the sidebar now -->
+
     <div id="app-container">
+        <!-- Static Sidebar Generation -->
+        <aside id="sidebar-container">
+            <div class="toc-sidebar">
+                <div class="toc-sidebar-header">
+                    <!-- Cover image injected by JS -->
+                    <div class="book-info">
+                        <h1 id="book-title">{{ title[:60] }}{% if title|length > 60 %}...{% endif %}</h1>
+                        <p id="book-author">{{ metadata.get('author', 'Unknown')[:40] }}{% if metadata.get('author',
+                            'Unknown')|length > 40 %}...{% endif %}</p>
+                    </div>
+                </div>
+
+                <div class="toc-view" id="toc-list">
+                    <ul>
+                        {%- for item in metadata.toc recursive %}
+                        <li>
+                            {%- if item.href %}
+                            <a href="{{ item.href }}" title="{{ item.label }}">{{ item.label }}</a>
+                            {%- else %}
+                            <span title="{{ item.label }}" style="color: GrayText;">{{ item.label }}</span>
+                            {%- endif %}
+                            {%- if item.children %}
+                            <ul>{{ loop(item.children) }}</ul>
+                            {%- endif %}
+                        </li>
+                        {%- endfor %}
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
         <div id="content-wrapper">
+            <!-- Topbar constructed statically -->
+            <header id="topbar-container">
+            </header>
+
             <main id="main-content" tabindex="0">
                 <div class="content-body text-base">
                     {{ body_content }}
                 </div>
             </main>
-            <header id="topbar-container"></header>
         </div>
     </div>
 </body>

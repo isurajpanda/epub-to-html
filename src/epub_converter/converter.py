@@ -484,20 +484,32 @@ class EPUBConverter:
                 
                 # onerror attribute removed as requested
 
-                # Wrap in <picture> tag if compressed images are available (AVIF + JXL)
-                # We check for .jpg because in compress_images mode, image.py maps everything to .jpg
-                if self.compress_images and image_src and (image_src.endswith('.avif') or image_src.endswith('.jpg')):
-                    # Use string manipulation to preserve forward slashes (Path would convert to backslash on Windows)
-                    base_path = image_src.rsplit('.', 1)[0]
-                    # Include JXL and AVIF sources
-                    sources = [
-                        f'<source srcset="{base_path}.jxl" type="image/jxl">',
-                        f'<source srcset="{base_path}.avif" type="image/avif">'
-                    ]
-
-                    # Note: The <img> tag itself (replaced_tag) acts as the fallback/primary display 
-                    # and points to the JPG file in this mode.
-                    return f'<picture>{"".join(sources)}{replaced_tag}</picture>'
+                # onerror attribute removed as requested
+                
+                # Check for picture tag candidates (ignore data URLs)
+                # We apply this structure in ALL modes (compress_images=True or False/Standard)
+                # to ensure consistent HTML output ("same html") as requested.
+                if image_src and not image_src.startswith('data:') and '.' in image_src:
+                     # Check extension to ensure it's a standard image type we can provide alternatives for
+                     # Note: image_src comes from path_mapping values which are usually mapped to .jpg (compressed/no-image) or original ext (standard)
+                     path_obj = Path(image_src)
+                     ext = path_obj.suffix.lower()
+                     
+                     if ext in ['.jpg', '.jpeg', '.png', '.avif', '.webp']:
+                        # Use string manipulation to preserve forward slashes (Path would convert to backslash on Windows)
+                        base_path = image_src.rsplit('.', 1)[0]
+                        
+                        # Include JXL and AVIF sources
+                        # Even if files don't exist (in standard/no-image mode), we generate the tags for structure consistency
+                        sources = [
+                            f'<source srcset="{base_path}.jxl" type="image/jxl">',
+                            f'<source srcset="{base_path}.avif" type="image/avif">'
+                        ]
+    
+                        # Note: The <img> tag itself (replaced_tag) acts as the fallback/primary display
+                        return f'<picture>{"".join(sources)}{replaced_tag}</picture>'
+    
+                return replaced_tag
 
                 return replaced_tag
 
@@ -509,7 +521,27 @@ class EPUBConverter:
             body_content = self.h1_open_pattern.sub('<h2', body_content)
             body_content = self.h1_close_pattern.sub('</h2>', body_content)
 
-            result = f'''<div class="chapter" id="page{i:02d}">
+            # Inject invisible chapter title for accessibility/structure
+            # Use the actual TOC label if available, otherwise fall back to cleaned filename
+            chapter_id = f"page{i:02d}"
+            chapter_titles = metadata.get('chapter_titles', {}) if metadata else {}
+            chapter_name = chapter_titles.get(chapter_id)
+            if not chapter_name:
+                # Fallback to file name if no TOC entry exists for this page
+                chapter_name = content_file_path.stem.replace('_', ' ').replace('-', ' ').title()
+            
+            # Skip h2 injection for pages named cover, insert, or title (case insensitive)
+            skip_keywords = ('cover', 'insert', 'title')
+            chapter_name_lower = chapter_name.lower()
+            should_inject_title = not any(kw in chapter_name_lower for kw in skip_keywords)
+            
+            if should_inject_title:
+                result = f'''<div class="chapter" id="{chapter_id}">
+<h2 class="chapter-title">{chapter_name}</h2>
+{body_content}
+</div>'''
+            else:
+                result = f'''<div class="chapter" id="{chapter_id}">
 {body_content}
 </div>'''
             
@@ -667,7 +699,13 @@ class EPUBConverter:
 
     def _map_toc_to_chapters(self, toc, content_id_mapping):
         """Map TOC entries to correct chapter IDs based on content file mapping.
-        Filtered TOC items (like Copyright, Yen Press) are removed from the TOC."""
+        Filtered TOC items (like Copyright, Yen Press) are removed from the TOC.
+        
+        Returns:
+            tuple: (mapped_toc, chapter_titles) where chapter_titles is a dict mapping chapter_id -> label
+        """
+        chapter_titles = {}  # Maps chapter_id (e.g., "page01") to its first TOC label
+        
         def process_toc_item(item):
             if 'href' in item:
                 original_href = item['href']
@@ -699,6 +737,10 @@ class EPUBConverter:
                 chapter_id = self._find_closest_chapter_match(file_path, content_id_mapping)
             
             if chapter_id:
+                # Store the first label for this chapter (don't overwrite if already set)
+                if chapter_id not in chapter_titles:
+                    chapter_titles[chapter_id] = item['label']
+                
                 # User requested to map strictly to #page{pagenumber} to ensure app navigation works
                 # We ignore fragments (like #link_006) which might be broken or cause issues
                 item['href'] = f"#{chapter_id}"
@@ -722,7 +764,7 @@ class EPUBConverter:
         
         # Process all TOC items and filter out None values (filtered items)
         mapped_toc = [process_toc_item(item) for item in toc]
-        return [item for item in mapped_toc if item is not None]
+        return [item for item in mapped_toc if item is not None], chapter_titles
 
     def _find_closest_chapter_match(self, file_path, content_id_mapping):
         """Find the closest matching chapter for a file path."""
@@ -938,12 +980,12 @@ class EPUBConverter:
                     file_content = f.read()
                     crc32_value = zlib.crc32(file_content) & 0xffffffff  # Ensure unsigned 32-bit value
                 
-                # Generate CRC32-based filename: {crc32}-{index:02d}.avif
-                output_filename = f"{crc32_value:08x}-{image_index:02d}.avif"
+                # Generate CRC32-based filename: {crc32}-{index:02d}.jpg (matching compress_images behavior)
+                output_filename = f"{crc32_value:08x}-{image_index:02d}.jpg"
             except Exception as e:
                 print(f"    Warning: Could not calculate CRC32 for {filename}: {e}")
                 # Fallback to index-only naming if CRC32 calculation fails
-                output_filename = f"image-{image_index:02d}.avif"
+                output_filename = f"image-{image_index:02d}.jpg"
             html_path = f"/images/{output_filename}"
             
             # If it's cover, store the filename for metadata update
@@ -1133,8 +1175,11 @@ class EPUBConverter:
             
             # Process TOC entries to map them to correct chapter IDs
             if toc:
-                toc = self._map_toc_to_chapters(toc, content_id_mapping)
+                toc, chapter_titles = self._map_toc_to_chapters(toc, content_id_mapping)
                 metadata['toc'] = toc
+                metadata['chapter_titles'] = chapter_titles  # Maps page{xx} -> TOC label
+            else:
+                metadata['chapter_titles'] = {}
             
             metadata['content_id_mapping'] = content_id_mapping
 
@@ -1372,7 +1417,7 @@ class EPUBConverter:
             'epub_filename_base': metadata.get('epub_filename_base'),
             'epub_filename_base_url': metadata.get('epub_filename_base_url'),
             'epub_filename_cdn_base_url': metadata.get('epub_filename_cdn_base_url'),
-            'toc': metadata.get('toc', []),
+            # 'toc': metadata.get('toc', []), # TOC is now rendered directly in HTML
             'images_compressed': metadata.get('images_compressed'),
             # Note: content_id_mapping is removed as it's not needed by frontend
             # and contains EPUB internal structure (OEBPS paths, etc.)

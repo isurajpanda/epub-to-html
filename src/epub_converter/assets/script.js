@@ -1,59 +1,113 @@
-// --- START: Embedded toc_and_topbar.js logic ---
+
 function truncateText(t, e = 50) { if (!t || t.length <= e) return t; const n = t.substring(0, e), r = n.lastIndexOf(" "); return r > e * .7 ? n.substring(0, r).trim() + "..." : n.trim() + "..." }
-function buildTocList(t, e) { const n = document.createElement("ul"), r = document.createDocumentFragment(); for (let o = 0, a = t.length; o < a; o++) { const a = t[o], i = document.createElement("li"); if (a.href) { const t = document.createElement("a"); t.textContent = truncateText(a.label, 45), t.title = a.label, t.href = a.href, t.onclick = n => { n.preventDefault(), e && e(a, n) }, i.appendChild(t) } else { const t = document.createElement("span"); t.textContent = truncateText(a.label, 45), t.title = a.label, t.style.color = "GrayText", i.appendChild(t) } a.children && a.children.length && i.appendChild(buildTocList(a.children, e)), r.appendChild(i) } return n.appendChild(r), n }
-// --- END: Embedded toc_and_topbar.js logic ---
 
 // --- START: Application Logic ---
 let _appDataCache = null, _bionicObserver = null, _bionicSet = new WeakSet;
 const getAppData = () => { if (_appDataCache) return _appDataCache; const t = document.getElementById("app-data"); try { _appDataCache = JSON.parse(t.textContent), t.textContent = "", t.remove() } catch (e) { _appDataCache = {} } return _appDataCache };
 
-const injectMemoryStyles = () => {
-    const t = document.createElement("style"); t.textContent = `
-.chapter{content-visibility:auto;contain-intrinsic-size:1px 1000px;contain:layout paint style}
-#main-content{will-change:scroll-position}
-img{content-visibility:auto;contain-intrinsic-size:100px 300px}
-.bionic-active .bionic-wrapper{display:inline}
-.b-word{display:inline-block}
-.b-bold{font-weight:700}
-.b-fade{opacity:.65}
-.font-option.active{background-color:var(--link-color);color:#fff;border-color:var(--link-color)}
-`, document.head.appendChild(t)
-};
-
 const scrollToElement = t => { t && (window.setScrollspyNavigating && window.setScrollspyNavigating(!0), t.scrollIntoView({ behavior: "auto", block: "start" }), setTimeout(() => { window.setScrollspyNavigating && window.setScrollspyNavigating(!1) }, 100)) };
 
-const handleTocClick = (t, e) => { window.innerWidth < 768 && toggleSidebar(); if (t.href) { const e = t.href.includes("#") ? t.href.substring(t.href.indexOf("#") + 1) : null; if (e) { const t = document.getElementById(e); t && (scrollToElement(t), history.replaceState(null, null, "#" + e)) } } };
+const handleTocClick = (t, e) => {
+    // Close sidebar on mobile when a link is clicked
+    if (window.innerWidth < 768) toggleSidebar();
 
-const createTopbar = () => { const t = document.getElementById("topbar-container"); if (!t) return; const e = getAppData().epub_filename || ""; t.innerHTML = `<div class="top-toolbar"><div class="top-left-controls"><button type="button" title="Show sidebar" aria-label="Show sidebar" id="sidebar-toggle"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/></svg></button><button type="button" title="Previous Chapter" aria-label="Previous Chapter" id="prev-chapter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5"/></svg></button><button type="button" title="Next Chapter" aria-label="Next Chapter" id="next-chapter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8"/></svg></button></div><div class="top-right-controls"><button id="settings-toggle" class="icon-button" aria-label="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/></svg></button>${e ? `<a href="/epub/${e}" title="Download EPUB" aria-label="Download EPUB" id="download-epub" download><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg></a>` : ""}<button type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen" id="fullscreen-toggle"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg></button></div></div>` };
+    // Standard hash navigation happens by default if we simply don't preventDefault
+    // However, the smooth scroll logic above suggests we might want to intervene.
+    // If JS is active, we can do smooth scroll.
 
-const createSidebar = t => {
-    const e = document.createElement("aside"); e.id = "sidebar-container";
-    let n;
-    if (t.cover_image_url) {
-        if (t.images_compressed && (t.cover_image_url.endsWith('.jpg') || t.cover_image_url.endsWith('.avif'))) {
-            const basePath = t.cover_image_url.substring(0, t.cover_image_url.lastIndexOf('.'));
-            n = `<picture>
-            <source srcset="${basePath}.jxl" type="image/jxl">
-            <source srcset="${basePath}.avif" type="image/avif">
-            <img id="book-cover" src="${t.cover_image_url}" alt="Book cover" loading="lazy">
-        </picture>`;
-        } else {
-            n = `<img id="book-cover" src="${t.cover_image_url}" alt="Book cover" loading="lazy">`;
+    if (t.hash) {
+        const id = t.hash.substring(1);
+        const target = document.getElementById(id);
+        if (target) {
+            e.preventDefault();
+            scrollToElement(target);
+            history.replaceState(null, null, "#" + id);
         }
-    } else {
-        n = '<img id="book-cover" src="" alt="Book cover" style="display: none;">';
     }
-    e.innerHTML = `<div class="toc-sidebar"><div class="toc-sidebar-header">${n}<div class="book-info"><h1 id="book-title">${t.title ? truncateText(t.title, 60) : ""}</h1><p id="book-author">${t.author ? truncateText(t.author, 40) : ""}</p></div></div><div class="toc-view" id="toc-list"></div></div>`, t.title || (e.querySelector("#book-title").style.display = "none"), t.author || (e.querySelector("#book-author").style.display = "none"), document.getElementById("app-container").appendChild(e); const r = document.getElementById("toc-list"); return t.toc && r && r.appendChild(buildTocList(t.toc, handleTocClick)), e
 };
 
 const createSettingsPanel = () => { const t = document.createElement("aside"); return t.id = "settings-sidebar-container", t.innerHTML = `<div class="settings-sidebar"><div class="settings-header"><h2>Reader Settings</h2><button id="settings-close" aria-label="Close settings">×</button></div><div class="settings-content"><div class="settings-section"><div class="font-size-control"><div id="font-size-preview" class="font-size-preview">Lorem ipsum</div><button id="bionic-reading-toggle" class="font-option" aria-label="Toggle Bionic Reading"><span>Bionic Reading</span></button><h3>Font Size</h3><div class="slider-container"><span class="size-label small">A</span><input type="range" id="font-size-slider" min="12" max="40" step="2" value="18" aria-label="Font size"><span class="size-label large">A</span></div></div></div><div class="settings-section"><h3>Font Family</h3><div class="font-family-grid"><button class="font-option active" data-font="original" style="font-family: serif">Original</button><button class="font-option" data-font="montserrat" style="font-family: sans-serif">Montserrat</button><button class="font-option" data-font="arial" style="font-family: Arial, sans-serif">Arial</button><button class="font-option" data-font="verdana" style="font-family: Verdana, sans-serif">Verdana</button><button class="font-option" data-font="roboto-condensed" style="font-family: sans-serif">Roboto</button><button class="font-option" data-font="comic-sans" style="font-family: cursive">Comic</button></div><div class="setting-group"><div class="theme-header"><h3>Theme</h3><div class="mode-toggle"><span class="mode-label">Light</span><label class="switch"><input type="checkbox" id="theme-mode-toggle"><span class="slider round"></span></label><span class="mode-label">Dark</span></div></div><div class="theme-options"><button class="theme-option active" data-theme="classic"><div class="theme-preview classic"></div><span>Classic</span></button><button class="theme-option" data-theme="vintage"><div class="theme-preview vintage"></div><span>Vintage</span></button><button class="theme-option" data-theme="lipstick"><div class="theme-preview lipstick"></div><span>Lipstick</span></button><button class="theme-option" data-theme="ocean"><div class="theme-preview ocean"></div><span>Ocean</span></button><button class="theme-option" data-theme="cyber"><div class="theme-preview cyber"></div><span>Cyber</span></button><button class="theme-option" data-theme="nature"><div class="theme-preview nature"></div><span>Nature</span></button></div></div></div></div></div>`, document.getElementById("app-container").appendChild(t), initSettings(), t };
 
 const createImageModal = () => { const t = document.createElement("div"); return t.id = "image-modal", t.className = "image-modal", t.innerHTML = '<div class="image-modal-content"><picture id="modal-picture"><img id="modal-image" src="" alt="Image"></picture><button id="modal-close" class="image-modal-close" title="Close">×</button></div>', document.body.appendChild(t), t };
 
-const createSidebarOverlay = () => { if (document.getElementById("sidebar-overlay")) return; const t = document.createElement("div"); t.id = "sidebar-overlay", t.className = "sidebar-overlay", document.body.appendChild(t), t.addEventListener("click", t => { t.target.closest("aside") || (document.getElementById("app-container").classList.contains("sidebar-open") ? toggleSidebar() : document.getElementById("app-container").classList.contains("settings-open") && toggleSettings()) }) };
+const createSidebarOverlay = () => {
+    // Standard JS overlay for settings or desktop sidebar clicks
+    if (document.getElementById("sidebar-overlay")) return;
+    const t = document.createElement("div");
+    t.id = "sidebar-overlay", t.className = "sidebar-overlay", document.body.appendChild(t),
+        t.addEventListener("click", t => {
+            if (t.target.closest("aside")) return;
 
-const togglePanel = t => { const e = document.getElementById("app-container"); createSidebarOverlay(); let a = null; "sidebar" === t && !document.getElementById("sidebar-container") && (a = createSidebar(getAppData())), "settings" === t && !document.getElementById("settings-sidebar-container") && (a = createSettingsPanel()); const n = "sidebar" === t ? "sidebar-open" : "settings-open", r = "sidebar" === t ? "settings-open" : "sidebar-open"; e.classList.remove(r); const o = () => { e.classList.toggle(n), window.innerWidth <= 768 && document.getElementById("sidebar-overlay").classList.toggle("active", e.classList.contains(n)), "settings" === t && syncBionicButtonState() }; a ? (a.offsetHeight, requestAnimationFrame(() => requestAnimationFrame(o))) : o() };
-const toggleSidebar = () => togglePanel("sidebar"), toggleSettings = () => togglePanel("settings");
+            const container = document.getElementById("app-container");
+            if (container.classList.contains("settings-open")) toggleSettings();
+            if (container.classList.contains("sidebar-open")) toggleSidebar();
+        })
+};
+
+// Toggle Sidebar Logic - Mixed Mode (JS + Checkbox)
+// If JS is present, we prefer manipulating the class for "Desktop" (which didn't use checkbox before)
+// But for "Mobile", we are now using the checkbox.
+// Actually, simple solution: 
+// The checkbox controls the sidebar. If we want to toggle via JS, we click the checkbox or change its checked state.
+const toggleSidebar = () => {
+    const container = document.getElementById("app-container");
+    const isMobile = window.innerWidth < 768;
+
+    // If settings is open and we're opening the sidebar, close settings first
+    if (!container.classList.contains("sidebar-open") && container.classList.contains("settings-open")) {
+        container.classList.remove("settings-open");
+    }
+
+    // Toggle class
+    container.classList.toggle("sidebar-open");
+    const isOpen = container.classList.contains("sidebar-open");
+
+    // Manage overlay for mobile
+    if (isMobile) {
+        createSidebarOverlay();
+        const overlay = document.getElementById("sidebar-overlay");
+        if (overlay) {
+            if (isOpen) {
+                overlay.classList.add("active");
+            } else {
+                overlay.classList.remove("active");
+            }
+        }
+    }
+};
+
+const togglePanel = t => {
+    const e = document.getElementById("app-container");
+    createSidebarOverlay();
+    let a = null;
+
+    if ("settings" === t && !document.getElementById("settings-sidebar-container")) {
+        a = createSettingsPanel();
+    }
+
+    // settings matches 'settings-open' class
+    if ("settings" === t) {
+        const isOpen = e.classList.contains("settings-open");
+        if (isOpen) {
+            e.classList.remove("settings-open");
+            // Also hide JS overlay
+            document.getElementById("sidebar-overlay").classList.remove("active");
+        } else {
+            // Close sidebar if open
+            if (e.classList.contains("sidebar-open")) {
+                toggleSidebar(); // uses class list logic now
+            }
+
+            e.classList.add("settings-open");
+            document.getElementById("sidebar-overlay").classList.add("active");
+            syncBionicButtonState();
+        }
+    } else if ("sidebar" === t) {
+        toggleSidebar();
+    }
+};
+
+const toggleSettings = () => togglePanel("settings");
 
 const updateFontSize = t => { document.querySelector('.content-body').style.fontSize = `${t}px`; const e = document.getElementById("font-size-preview"), n = document.getElementById("font-size-slider"); e && (e.style.fontSize = `${t}px`), n && (n.value = t) };
 
@@ -130,13 +184,84 @@ const closeImageModal = () => {
     document.getElementById("main-content").scrollTo(0, savedScroll);
 };
 
-document.addEventListener("click", t => { const e = t.target.closest("button"); if (e) switch (e.id) { case "sidebar-toggle": toggleSidebar(); break; case "prev-chapter": navigateChapter("prev"); break; case "next-chapter": navigateChapter("next"); break; case "settings-toggle": case "settings-close": toggleSettings(); break; case "download-epub": downloadEpub(); break; case "fullscreen-toggle": toggleFullscreen(); break; case "modal-close": closeImageModal(); break; case "bionic-reading-toggle": toggleBionic() }const n = t.target.closest("img"); n && n.closest(".content-body") && !document.getElementById("app-container").classList.contains("sidebar-open") && !document.getElementById("app-container").classList.contains("settings-open") && (t.preventDefault(), openImageModal(n.src, n.alt)); t.target.closest(".image-modal") && !t.target.closest("#modal-image") && closeImageModal(); const r = t.target.closest('a[href^="#"]'); if (r && !t.defaultPrevented) { const e = r.getAttribute("href"), n = document.getElementById(e.substring(1)); n && (t.preventDefault(), scrollToElement(n), history.replaceState(null, null, e)) } });
+
+const createTopbar = () => {
+    const t = document.getElementById("topbar-container");
+    if (!t) return;
+    const data = getAppData();
+    const e = data.epub_filename || "";
+
+    t.innerHTML = `<div class="top-toolbar"><div class="top-left-controls"><button type="button" title="Show sidebar" aria-label="Show sidebar" id="sidebar-toggle"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/></svg></button><button type="button" title="Previous Chapter" aria-label="Previous Chapter" id="prev-chapter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H5.707l2.147 2.146a.5.5 0 0 1-.708.708l-3-3a.5.5 0 0 1 0-.708l3-3a.5.5 0 1 1 .708.708L5.707 7.5H11.5a.5.5 0 0 1 .5.5"/></svg></button><button type="button" title="Next Chapter" aria-label="Next Chapter" id="next-chapter"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 8a.5.5 0 0 1 .5-.5h5.793L8.146 5.354a.5.5 0 1 1 .708-.708l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8.5H4.5A.5.5 0 0 1 4 8"/></svg></button></div><div class="top-right-controls"><button id="settings-toggle" class="icon-button" aria-label="Settings"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.5 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M9.05 3a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0V3zM4.5 7a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M2.05 8a2.5 2.5 0 0 1 4.9 0H16v1H6.95a2.5 2.5 0 0 1-4.9 0H0V8zm9.45 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m-2.45 1a2.5 2.5 0 0 1 4.9 0H16v1h-2.05a2.5 2.5 0 0 1-4.9 0H0v-1z"/></svg></button>${e ? `<a href="../${e}" title="Download EPUB" aria-label="Download EPUB" id="download-epub" download><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/></svg></a>` : ""}<button type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen" id="fullscreen-toggle"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5M.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5m15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5"/></svg></button></div></div>`;
+};
+
+const injectSidebarCover = () => {
+    const t = getAppData();
+    const header = document.querySelector(".toc-sidebar-header");
+    if (!header || !t.cover_image_url) return;
+
+    let n;
+    if (t.images_compressed && (t.cover_image_url.endsWith('.jpg') || t.cover_image_url.endsWith('.avif'))) {
+        const basePath = t.cover_image_url.substring(0, t.cover_image_url.lastIndexOf('.'));
+        n = `<picture>
+        <source srcset="${basePath}.jxl" type="image/jxl">
+        <source srcset="${basePath}.avif" type="image/avif">
+        <img id="book-cover" src="${t.cover_image_url}" alt="Book cover" loading="lazy">
+    </picture>`;
+    } else {
+        n = `<img id="book-cover" src="${t.cover_image_url}" alt="Book cover" loading="lazy">`;
+    }
+
+    // Create temp container to turn string into node
+    const div = document.createElement('div');
+    div.innerHTML = n;
+    const imgNode = div.firstElementChild;
+
+    // Insert before the book info div
+    header.insertBefore(imgNode, header.firstElementChild);
+};
+
+// Event Delegation
+document.addEventListener("click", t => {
+    // Handle TOC Links explicitly to allow JS-based smooth operations if loaded
+    const tocLink = t.target.closest("#toc-list a");
+    if (tocLink) {
+        handleTocClick(tocLink, t);
+        return;
+    }
+
+    const e = t.target.closest("button");
+    if (e) {
+        switch (e.id) {
+            case "sidebar-toggle":
+                // Manually toggle the checkbox
+                toggleSidebar();
+                break;
+            case "prev-chapter": navigateChapter("prev"); break;
+            case "next-chapter": navigateChapter("next"); break;
+            case "settings-toggle": case "settings-close": toggleSettings(); break;
+            case "download-epub": downloadEpub(); break;
+            case "fullscreen-toggle": toggleFullscreen(); break;
+            case "modal-close": closeImageModal(); break;
+            case "bionic-reading-toggle": toggleBionic(); break;
+        }
+    }
+
+    const n = t.target.closest("img"); n && n.closest(".content-body") && !document.getElementById("app-container").classList.contains("settings-open") && !document.getElementById("app-container").classList.contains("sidebar-open") && (t.preventDefault(), openImageModal(n.src, n.alt));
+    t.target.closest(".image-modal") && !t.target.closest("#modal-image") && closeImageModal();
+
+    // Existing hash link logic
+    const r = t.target.closest('a[href^="#"]');
+    if (r && !t.defaultPrevented && !tocLink) {
+        const e = r.getAttribute("href"), n = document.getElementById(e.substring(1));
+        n && (t.preventDefault(), scrollToElement(n), history.replaceState(null, null, e))
+    }
+});
 
 document.addEventListener("keydown", t => { "Escape" === t.key && closeImageModal(); if (["INPUT", "TEXTAREA"].includes(t.target.tagName)) return; const e = t.key.toLowerCase();["a", "d", "arrowleft", "arrowright"].includes(e) && (t.preventDefault(), "a" === e || "arrowleft" === e ? navigateChapter("prev") : navigateChapter("next")), "f" === e && (t.preventDefault(), toggleFullscreen()) });
 
 document.addEventListener("DOMContentLoaded", () => {
-    injectMemoryStyles();
     createTopbar();
+    injectSidebarCover();
 
     const mainContent = document.getElementById("main-content");
     let isNavigating = false;
