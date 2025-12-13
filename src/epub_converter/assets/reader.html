@@ -42,7 +42,7 @@
     <link rel="stylesheet" href="/static/style.css" crossorigin="anonymous">
     <script src="/static/script.js" crossorigin="anonymous" defer></script>
 
-    <script id="app-data" type="application/json">
+    <script id="app-data" type="application/ld+json">
         {{ metadata_json }}
     </script>
 </head>
@@ -55,16 +55,17 @@
         <!-- Static Sidebar Generation -->
         <aside id="sidebar-container">
             <div class="toc-sidebar">
-                <div class="toc-sidebar-header">
+                <header class="toc-sidebar-header">
                     <!-- Cover image injected by JS -->
                     <div class="book-info">
                         <h1 id="book-title">{{ title[:60] }}{% if title|length > 60 %}...{% endif %}</h1>
-                        <p id="book-author">{{ metadata.get('author', 'Unknown')[:40] }}{% if metadata.get('author',
-                            'Unknown')|length > 40 %}...{% endif %}</p>
+                        <address id="book-author">{{ metadata.get('author', 'Unknown')[:40] }}{% if
+                            metadata.get('author',
+                            'Unknown')|length > 40 %}...{% endif %}</address>
                     </div>
-                </div>
+                </header>
 
-                <div class="toc-view" id="toc-list">
+                <nav class="toc-view" id="toc-list" aria-label="Table of contents">
                     <ul>
                         {%- for item in metadata.toc recursive %}
                         <li>
@@ -79,7 +80,7 @@
                         </li>
                         {%- endfor %}
                     </ul>
-                </div>
+                </nav>
             </div>
         </aside>
 
@@ -89,9 +90,9 @@
             </header>
 
             <main id="main-content" tabindex="0">
-                <div class="content-body text-base">
+                <article class="content-body text-base">
                     {{ body_content }}
-                </div>
+                </article>
             </main>
         </div>
     </div>

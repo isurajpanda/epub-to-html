@@ -274,10 +274,12 @@ img:hover {
     color: var(--text-color)
 }
 
-.toc-sidebar-header p {
+.toc-sidebar-header p,
+.toc-sidebar-header address {
     font-size: small;
     color: var(--sidebar-text);
-    margin-top: .2rem
+    margin-top: .2rem;
+    font-style: normal
 }
 
 .toc-view,

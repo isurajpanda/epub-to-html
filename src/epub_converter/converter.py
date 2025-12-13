@@ -526,24 +526,22 @@ class EPUBConverter:
             chapter_id = f"page{i:02d}"
             chapter_titles = metadata.get('chapter_titles', {}) if metadata else {}
             chapter_name = chapter_titles.get(chapter_id)
-            if not chapter_name:
-                # Fallback to file name if no TOC entry exists for this page
-                chapter_name = content_file_path.stem.replace('_', ' ').replace('-', ' ').title()
-            
-            # Skip h2 injection for pages named cover, insert, or title (case insensitive)
-            skip_keywords = ('cover', 'insert', 'title')
-            chapter_name_lower = chapter_name.lower()
-            should_inject_title = not any(kw in chapter_name_lower for kw in skip_keywords)
+            # Skip h2 injection if no chapter name found in TOC
+            should_inject_title = False
+            if chapter_name:
+                skip_keywords = ('cover', 'insert', 'title')
+                chapter_name_lower = chapter_name.lower()
+                should_inject_title = not any(kw in chapter_name_lower for kw in skip_keywords)
             
             if should_inject_title:
-                result = f'''<div class="chapter" id="{chapter_id}">
+                result = f'''<section class="chapter" id="{chapter_id}">
 <h2 class="chapter-title">{chapter_name}</h2>
 {body_content}
-</div>'''
+</section>'''
             else:
-                result = f'''<div class="chapter" id="{chapter_id}">
+                result = f'''<section class="chapter" id="{chapter_id}">
 {body_content}
-</div>'''
+</section>'''
             
             # DEBUG: Check for malformed spans
             if '<span ' in result and 'xmlns=' not in result:
@@ -1402,31 +1400,68 @@ class EPUBConverter:
         """Returns the complete HTML structure with embedded CSS and JS."""
         template = self.jinja_env.get_template("reader.html")
         
-        # Sanitize metadata to remove sensitive information
-        # Only include fields that are actually used by the frontend JavaScript
-        sanitized_metadata = {
-            'title': metadata.get('title'),
-            'author': metadata.get('author'),
-            'publisher': metadata.get('publisher'),
-            'date': metadata.get('date'),
-            'description': metadata.get('description'),
-            'subject': metadata.get('subject', []),
-            'language': metadata.get('language'),
-            'cover_image_url': metadata.get('cover_image_url'),
-            'epub_filename': metadata.get('epub_filename'),
-            'epub_filename_base': metadata.get('epub_filename_base'),
-            'epub_filename_base_url': metadata.get('epub_filename_base_url'),
-            'epub_filename_cdn_base_url': metadata.get('epub_filename_cdn_base_url'),
-            # 'toc': metadata.get('toc', []), # TOC is now rendered directly in HTML
-            'images_compressed': metadata.get('images_compressed'),
-            # Note: content_id_mapping is removed as it's not needed by frontend
-            # and contains EPUB internal structure (OEBPS paths, etc.)
+        # Build Schema.org structured data for SEO/bot readability
+        schema_data = {
+            "@context": "https://schema.org",
+            "@type": "Book",
+            "name": metadata.get('title'),
+            "inLanguage": metadata.get('language', 'en')
         }
         
+        # Add cover image if present
+        if metadata.get('cover_image_url'):
+            schema_data["image"] = metadata.get('cover_image_url')
+        
+        # Add author(s) - split by " and " or ", " to handle multiple authors
+        if metadata.get('author'):
+            author_str = metadata.get('author')
+            # Split by common separators for multiple authors
+            separators = [' and ', ', ', ' & ']
+            authors = [author_str]
+            for sep in separators:
+                if sep in author_str:
+                    authors = [a.strip() for a in author_str.split(sep) if a.strip()]
+                    break
+            
+            if len(authors) == 1:
+                schema_data["author"] = {"@type": "Person", "name": authors[0]}
+            else:
+                schema_data["author"] = [{"@type": "Person", "name": a} for a in authors]
+        
+        # Add publisher if present
+        if metadata.get('publisher'):
+            schema_data["publisher"] = {
+                "@type": "Organization",
+                "name": metadata.get('publisher')
+            }
+        
+        # Add description if present
+        if metadata.get('description'):
+            schema_data["description"] = metadata.get('description')
+        
+        # Add date published if present
+        if metadata.get('date'):
+            schema_data["datePublished"] = metadata.get('date')
+        
+        # Add genre/subject if present
+        if metadata.get('subject'):
+            schema_data["genre"] = metadata.get('subject')
+        
+        # Add app-specific data as valid additionalProperty
+        additional_props = []
+        if metadata.get('epub_filename'):
+            additional_props.append({
+                "@type": "PropertyValue",
+                "name": "epub_filename",
+                "value": metadata.get('epub_filename')
+            })
+        if additional_props:
+            schema_data["additionalProperty"] = additional_props
+        
         if HAS_ORJSON:
-            metadata_json = json.dumps(sanitized_metadata).decode('utf-8')
+            metadata_json = json.dumps(schema_data).decode('utf-8')
         else:
-            metadata_json = json.dumps(sanitized_metadata)
+            metadata_json = json.dumps(schema_data)
         return template.render(
             title=title,
             body_content=body_content,
