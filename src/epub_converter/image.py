@@ -237,93 +237,151 @@ class ImageProcessor:
         
         return None, None
 
-    def _process_single_image_pyvips(self, img_path, extract_dir, epub_output_folder, central_images_folder, epub_title=None, is_cover=False, image_index=0, is_directory_mode=False):
-        """Process a single image using pyvips and save as file."""
+    def _process_single_image_pyvips(self, img_path, extract_dir, epub_output_folder, central_images_folder, epub_title=None, is_cover=False, image_index=0, is_directory_mode=False, compress_images=False):
+        """Process a single image.
+        If compress_images is True:
+          - Do NOT copy original.
+          - Generate AVIF and JXL from source.
+          - Use AVIF as the primary html_path.
+        If compress_images is False:
+          - Copy original.
+          - Do not generate others.
+        """
         try:
-            import pyvips
-            # Load image with pyvips
-            img = pyvips.Image.new_from_file(str(img_path))
-            
-            # Resize if needed (maintain aspect ratio, max width 1080)
-            # Resizing removed to keep original resolution
-            # if img.width > 1080:
-            #     scale = 1080 / img.width
-            #     img = img.resize(scale)
-            
-            # Analyze image
-            analysis = self._analyze_image_with_pyvips(img_path)
-            
-            # Convert to AVIF based on analysis
-            if analysis['is_bw']:
-                # Convert to grayscale
-                gray_img = img.colourspace('b-w')
-                
-                # For simple B&W images, use lossless
-                if analysis['complexity'] < 50:
-                    avif_data = gray_img.write_to_buffer('.avif[lossless=true]')
-                    compression_info = "lossless compression"
-                else:
-                    # For complex B&W, use aggressive compression
-                    avif_data = gray_img.write_to_buffer('.avif[Q=35,speed=6]')
-                    compression_info = "35% compression"
-                
-                print(f"Detected B&W image: {img_path.name}, using {compression_info}")
-            else:
-                # Color image - use adaptive quality
-                quality = analysis['complexity']
-                avif_data = img.write_to_buffer(f'.avif[Q={quality},speed=6]')
-                
-                complexity_level = "high" if quality == 85 else "medium" if quality == 80 else "low"
-                print(f"Detected {complexity_level} complexity color image: {img_path.name}, using {quality}% compression")
-            
-            # Generate filename based on CRC32 checksum
-            # New naming scheme: {crc32}-{index:02d}.avif
-            
             # Calculate CRC32 checksum of the original image file
             import zlib
             with open(img_path, 'rb') as f:
                 file_content = f.read()
-                crc32_value = zlib.crc32(file_content) & 0xffffffff  # Ensure unsigned 32-bit value
+                crc32_value = zlib.crc32(file_content) & 0xffffffff
             
-            # Generate filename with CRC32
-            # Use 02d for padding (01, 02, ... 99, 100)
-            output_filename = f"{crc32_value:08x}-{image_index:02d}.avif"
+            base_name = f"{crc32_value:08x}-{image_index:02d}"
             
-            # Determine where to save and the HTML path
+            # Determine output directory
             if is_directory_mode and central_images_folder:
-                # Save to central images folder in directory mode
-                output_path = central_images_folder / output_filename
-                # Use absolute path for directory mode
-                html_path = f"/images/{output_filename}"
+                dest_dir = central_images_folder
+                # html_path defined later
             else:
-                # Save to EPUB output folder in single-file mode
-                output_path = epub_output_folder / output_filename
+                dest_dir = epub_output_folder
+                # html_path defined later
+            
+            output_path = None
+            width = 0
+            height = 0
+            output_filename = ""
+            html_path = ""
+            
+            import pyvips
+            
+            if compress_images:
+                # COMPRESSION MODE
+                # Do not copy original
+                
+                # Analyze image
+                analysis = self._analyze_image_with_pyvips(img_path)
+                width = analysis['width']
+                height = analysis['height']
+                
+                img = pyvips.Image.new_from_file(str(img_path))
+                
+                # AVIF Generation
+                avif_filename = f"{base_name}.avif"
+                avif_path = dest_dir / avif_filename
+                
+                # JXL Generation
+                jxl_filename = f"{base_name}.jxl"
+                jxl_path = dest_dir / jxl_filename
+
+                if analysis['is_bw']:
+                    gray_img = img.colourspace('b-w')
+                    if analysis['complexity'] < 50:
+                        # Lossless
+                        avif_data = gray_img.write_to_buffer('.avif[lossless=true]')
+                        jxl_data = gray_img.write_to_buffer('.jxl[lossless=true]')
+                        compression_info = "lossless compression"
+                    else:
+                        # Lossy (B&W Q=40)
+                        avif_data = gray_img.write_to_buffer('.avif[Q=40,speed=6]')
+                        jxl_data = gray_img.write_to_buffer('.jxl[Q=40,effort=6]') # effort 6 is balanced
+                        compression_info = "40% compression"
+                    print(f"Detected B&W image: {img_path.name}, using {compression_info} (AVIF+JXL)")
+                else:
+                    # Map complexity to new Q values
+                    # Old logic: >60 -> 85, >30 -> 80, else 75
+                    # New logic: >60 -> High(80), >30 -> Med(70), else Low(60)
+                    
+                    raw_complexity = analysis['complexity']
+                    if raw_complexity == 85: # High
+                        quality = 80
+                    elif raw_complexity == 80: # Medium
+                        quality = 70
+                    else: # Low
+                        quality = 60
+
+                    avif_data = img.write_to_buffer(f'.avif[Q={quality},speed=6]') 
+                    jxl_data = img.write_to_buffer(f'.jxl[Q={quality},effort=6]') # effort 6 is balanced
+                    
+                    complexity_level = "high" if quality == 80 else "medium" if quality == 70 else "low"
+                    print(f"Detected {complexity_level} complexity color image: {img_path.name}, using {quality}% compression (AVIF+JXL)")
+                
+                # Save files
+                with open(avif_path, 'wb') as f: f.write(avif_data)
+                with open(jxl_path, 'wb') as f: f.write(jxl_data)
+                
+                # Generate JPG for cover image only (instead of WebP)
+                if is_cover:
+                    jpg_filename = f"{base_name}.jpg"
+                    jpg_path = dest_dir / jpg_filename
+                    # Use JPG Q=80
+                    jpg_data = img.write_to_buffer('.jpg[Q=80]') 
+                    with open(jpg_path, 'wb') as f: f.write(jpg_data)
+                    print(f"Generated JPG for cover: {img_path.name}")
+                
+                # Set return values
+                # Use JPG as the primary file for the <img> src (even if not generated for non-covers)
+                # This ensures the <img src> points to a JPG for fallback/future compatibility
+                output_filename = f"{base_name}.jpg"
+                output_path = dest_dir / output_filename # Note: This file might not exist for non-covers yet
                 html_path = f"/images/{output_filename}"
-            
-            # Save AVIF file
-            with open(output_path, 'wb') as f:
-                f.write(avif_data)
-            
+
+            else:
+                # STANDARD MODE
+                # Original extension
+                extension = img_path.suffix.lower()
+                if not extension:
+                    extension = ".jpg"
+                
+                output_filename = f"{base_name}{extension}"
+                output_path = dest_dir / output_filename
+                html_path = f"/images/{output_filename}"
+                
+                # Copy original file (always)
+                import shutil
+                shutil.copy2(img_path, output_path)
+                
+                # Get dimensions using pyvips (fast)
+                img = pyvips.Image.new_from_file(str(img_path))
+                width = img.width
+                height = img.height
+
             # Get relative original path for mapping
             relative_original = unquote(str(img_path.relative_to(extract_dir).as_posix()))
             
-            # Return relative path for use in HTML
             return {
                 'relative_original': relative_original,
                 'filename': unquote(img_path.name),
                 'output_filename': output_filename,
                 'output_path': output_path,
                 'html_path': html_path,
-                'width': img.width,
-                'height': img.height
+                'width': width,
+                'height': height
             }
 
         except Exception as e:
-            print(f"Warning: Could not process image {img_path} with pyvips: {e}")
+            print(f"Warning: Could not process image {img_path}: {e}")
             return None
 
-    def process_images_and_get_mapping(self, image_files, extract_dir, output_folder, epub_title=None, cover_image_path=None, central_images_folder=None, is_directory_mode=False):
-        """Process images to AVIF using pyvips and save to disk."""
+    def process_images_and_get_mapping(self, image_files, extract_dir, output_folder, epub_title=None, cover_image_path=None, central_images_folder=None, is_directory_mode=False, compress_images=False):
+        """Process images using pyvips and save to disk."""
         path_mapping = {}
         image_metadata = {}
         
@@ -350,7 +408,7 @@ class ImageProcessor:
                 
                 result = self._process_single_image_pyvips(
                     img_path, extract_dir, output_folder, central_images_folder or Path(), 
-                    epub_title, is_cover, image_index, is_directory_mode
+                    epub_title, is_cover, image_index, is_directory_mode, compress_images
                 )
                 if result:
                     # Add multiple path variations to the mapping for better lookup
@@ -396,7 +454,7 @@ class ImageProcessor:
                     executor.submit(
                         self._process_single_image_pyvips, 
                         task[0], extract_dir, output_folder, central_images_folder or Path(),
-                        epub_title, task[1], task[2], is_directory_mode
+                        epub_title, task[1], task[2], is_directory_mode, compress_images
                     ): task
                     for task in image_tasks
                 }

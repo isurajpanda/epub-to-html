@@ -31,12 +31,13 @@ from .parser import EPUBParser
 from .image import ImageProcessor
 
 class EPUBConverter:
-    def __init__(self, epub_path, output_folder=None, custom_css_path=None, no_script=False, no_image=False):
+    def __init__(self, epub_path, output_folder=None, custom_css_path=None, no_script=False, no_image=False, compress_images=False):
         self.epub_path = Path(epub_path)
         self.output_folder = Path(output_folder) if output_folder else self.epub_path.parent
         self.custom_css_path = custom_css_path
         self.no_script = no_script
         self.no_image = no_image
+        self.compress_images = compress_images
         self.temp_dir = None
         self.image_processor = ImageProcessor()
         
@@ -388,8 +389,12 @@ class EPUBConverter:
                 
                 # Extract the new image src to get filename for alt
                 src_match = self.img_src_extract_pattern.search(replaced_tag)
+                image_src = None
+                is_cover_image = False
+
                 if src_match:
-                    image_path = src_match.group(1)
+                    image_src = src_match.group(1)
+                    image_path = image_src
                     image_name = Path(image_path).stem  # Get filename without extension
                     
                     # Remove existing alt attribute if present
@@ -403,111 +408,96 @@ class EPUBConverter:
                         replaced_tag = replaced_tag[:-2] + f' alt="{image_name}" />'
                     elif replaced_tag.endswith('>'):
                         replaced_tag = replaced_tag[:-1] + f' alt="{image_name}">'
+
+                    # DETECT COVER IMAGE
+                    # Check for explicit ID or class indicating cover
+                    if 'id="coverimage"' in full_img_tag.lower() or 'class="coverimage"' in full_img_tag.lower() or 'class="cover"' in full_img_tag.lower():
+                        is_cover_image = True
+                    
+                    # Check if it matches the actual cover file path
+                    if not is_cover_image and metadata and 'actual_cover_file_path' in metadata:
+                        actual_cover = metadata['actual_cover_file_path']
+                        if actual_cover:
+                            try:
+                                cover_path = Path(actual_cover)
+                                cover_name = cover_path.name
+                                
+                                # Look for the cover image path in the mapping
+                                cover_mapped_path = None
+                                for key, value in path_mapping.items():
+                                    if Path(key).name == cover_name:
+                                        cover_mapped_path = value
+                                        break
+                                
+                                if cover_mapped_path and (image_src == cover_mapped_path or image_src.endswith(cover_mapped_path)):
+                                    is_cover_image = True
+                                
+                                # Fallback: check if 'cover' is in the name
+                                if not is_cover_image and ('cover' in image_src.lower() or 'cover' in cover_name.lower()):
+                                    is_cover_image = True
+                                    
+                            except Exception as e:
+                                print(f"    Warning: Error in cover image replacement: {e}")
                 
                 # Add appropriate loading attribute if not already present
-                if not has_loading:
-                    # Check if this is the cover image
-                    src_match = self.img_src_extract_pattern.search(replaced_tag)
-                    if src_match:
-                        image_path = src_match.group(1)
-                        is_cover_image = False
-                        
-                        # Check for explicit ID or class indicating cover
-                        # The user reported id="coverimage"
-                        if 'id="coverimage"' in full_img_tag.lower() or 'class="coverimage"' in full_img_tag.lower() or 'class="cover"' in full_img_tag.lower():
-                            is_cover_image = True
-                        
-                        # Check if it matches the actual cover file path
-                        if not is_cover_image and metadata and 'actual_cover_file_path' in metadata:
-                            actual_cover = metadata['actual_cover_file_path']
-                            if actual_cover:
-                                try:
-                                    cover_path = Path(actual_cover)
-                                    cover_name = cover_path.name
-                                    
-                                    # Look for the cover image path in the mapping
-                                    cover_mapped_path = None
-                                    for key, value in path_mapping.items():
-                                        if Path(key).name == cover_name:
-                                            cover_mapped_path = value
-                                            break
-                                    
-                                    if cover_mapped_path and (image_path == cover_mapped_path or image_path.endswith(cover_mapped_path)):
-                                        is_cover_image = True
-                                    
-                                    # Fallback: check if 'cover' is in the name
-                                    if not is_cover_image and ('cover' in image_path.lower() or 'cover' in cover_name.lower()):
-                                        is_cover_image = True
-                                        
-                                except Exception as e:
-                                    print(f"    Warning: Error in cover image replacement: {e}")
-                        
-                        if is_cover_image:
-                            # Cover image should be eager-loaded for LCP
-                            # Also ensure fetchpriority="high" is added
-                            if replaced_tag.endswith('/>'):
-                                replaced_tag = replaced_tag[:-2] + ' loading="eager" fetchpriority="high" decoding="async" />'
-                            else:
-                                replaced_tag = replaced_tag[:-1] + ' loading="eager" fetchpriority="high" decoding="async">'
+                if not has_loading and image_src:
+                    if is_cover_image:
+                        # Cover image should be eager-loaded for LCP
+                        # Also ensure fetchpriority="high" is added
+                        if replaced_tag.endswith('/>'):
+                            replaced_tag = replaced_tag[:-2] + ' loading="eager" fetchpriority="high" decoding="async" />'
                         else:
-                            # Other images should be lazy-loaded
-                            if replaced_tag.endswith('/>'):
-                                replaced_tag = replaced_tag[:-2] + ' loading="lazy" decoding="async" />'
-                            else:
-                                replaced_tag = replaced_tag[:-1] + ' loading="lazy" decoding="async">'
+                            replaced_tag = replaced_tag[:-1] + ' loading="eager" fetchpriority="high" decoding="async">'
                     else:
-                        # Fallback to lazy loading if we can't determine the image
+                        # Other images should be lazy-loaded
                         if replaced_tag.endswith('/>'):
                             replaced_tag = replaced_tag[:-2] + ' loading="lazy" decoding="async" />'
                         else:
                             replaced_tag = replaced_tag[:-1] + ' loading="lazy" decoding="async">'
                 
                 # Add width and height attributes if available in metadata
-                # This helps prevent layout shifts (CLS)
-                if image_metadata:
-                    # Extract the new src to look up metadata
-                    src_match = self.img_src_extract_pattern.search(replaced_tag)
-                    if src_match:
-                        new_src = src_match.group(1)
-                        img_info = image_metadata.get(new_src)
-                        
-                        # If not found by exact path, try filename matching
-                        if not img_info:
-                            new_src_name = Path(new_src).name
-                            for key, info in image_metadata.items():
-                                if Path(key).name == new_src_name:
-                                    img_info = info
-                                    break
-                        
-                        if img_info and 'width' in img_info and 'height' in img_info:
-                            width = img_info['width']
-                            height = img_info['height']
-                            
-                            # Check if width/height already exist
-                            has_width = 'width=' in replaced_tag.lower()
-                            has_height = 'height=' in replaced_tag.lower()
-                            
-                            if not has_width and not has_height:
-                                # Add dimensions
-                                if replaced_tag.endswith('/>'):
-                                    replaced_tag = replaced_tag[:-2] + f' width="{width}" height="{height}" />'
-                                else:
-                                    replaced_tag = replaced_tag[:-1] + f' width="{width}" height="{height}">'
-                
-                # Add onerror attribute for CDN fallback
-                # Extract the filename from the src to construct the CDN URL
-                src_match = self.img_src_extract_pattern.search(replaced_tag)
-                if src_match:
-                    image_src = src_match.group(1)
-                    # Extract just the filename (e.g., "/images/8f7587ac-09.avif" -> "8f7587ac-09.avif")
-                    image_filename = Path(image_src).name
-                    cdn_url = f"https://images.lnori.qzz.io/{image_filename}"
+                if image_metadata and image_src:
+                    img_info = image_metadata.get(image_src)
                     
-                    # Add onerror attribute before the closing tag
-                    if replaced_tag.endswith('/>'):
-                        replaced_tag = replaced_tag[:-2] + f' onerror="this.onerror=null; this.src=\'{cdn_url}\';" />'
-                    elif replaced_tag.endswith('>'):
-                        replaced_tag = replaced_tag[:-1] + f' onerror="this.onerror=null; this.src=\'{cdn_url}\';">'
+                    # If not found by exact path, try filename matching
+                    if not img_info:
+                        new_src_name = Path(image_src).name
+                        for key, info in image_metadata.items():
+                            if Path(key).name == new_src_name:
+                                img_info = info
+                                break
+                    
+                    if img_info and 'width' in img_info and 'height' in img_info:
+                        width = img_info['width']
+                        height = img_info['height']
+                        
+                        # Check if width/height already exist
+                        has_width = 'width=' in replaced_tag.lower()
+                        has_height = 'height=' in replaced_tag.lower()
+                        
+                        if not has_width and not has_height:
+                            # Add dimensions
+                            if replaced_tag.endswith('/>'):
+                                replaced_tag = replaced_tag[:-2] + f' width="{width}" height="{height}" />'
+                            else:
+                                replaced_tag = replaced_tag[:-1] + f' width="{width}" height="{height}">'
+                
+                # onerror attribute removed as requested
+
+                # Wrap in <picture> tag if compressed images are available (AVIF + JXL)
+                # We check for .jpg because in compress_images mode, image.py maps everything to .jpg
+                if self.compress_images and image_src and (image_src.endswith('.avif') or image_src.endswith('.jpg')):
+                    # Use string manipulation to preserve forward slashes (Path would convert to backslash on Windows)
+                    base_path = image_src.rsplit('.', 1)[0]
+                    # Include JXL and AVIF sources
+                    sources = [
+                        f'<source srcset="{base_path}.jxl" type="image/jxl">',
+                        f'<source srcset="{base_path}.avif" type="image/avif">'
+                    ]
+
+                    # Note: The <img> tag itself (replaced_tag) acts as the fallback/primary display 
+                    # and points to the JPG file in this mode.
+                    return f'<picture>{"".join(sources)}{replaced_tag}</picture>'
 
                 return replaced_tag
 
@@ -547,6 +537,9 @@ class EPUBConverter:
 
     def combine_and_generate_html(self, content_files, extract_dir, metadata, path_mapping, custom_css=None, image_metadata=None):
         """Combine content files, embed images as base64, and generate the final HTML with UI using parallel processing."""
+        # Inject compression status into metadata for JS to use (for sidebar cover <picture> tag)
+        metadata['images_compressed'] = self.compress_images
+        
         print(f"  Combining {len(content_files)} content files in reading order:")
         
         if len(content_files) <= 3:  # For small numbers of files, process sequentially
@@ -1082,7 +1075,8 @@ class EPUBConverter:
                 
                 path_mapping, image_metadata = self.image_processor.process_images_and_get_mapping(
                     image_files, extract_dir, epub_output_folder, epub_title, actual_cover_file_path,
-                    central_images_folder=images_output_folder, is_directory_mode=is_directory_mode
+                    central_images_folder=images_output_folder, is_directory_mode=is_directory_mode,
+                    compress_images=self.compress_images
                 )
 
                 # Determine cover image URL from mapping
@@ -1379,6 +1373,7 @@ class EPUBConverter:
             'epub_filename_base_url': metadata.get('epub_filename_base_url'),
             'epub_filename_cdn_base_url': metadata.get('epub_filename_cdn_base_url'),
             'toc': metadata.get('toc', []),
+            'images_compressed': metadata.get('images_compressed'),
             # Note: content_id_mapping is removed as it's not needed by frontend
             # and contains EPUB internal structure (OEBPS paths, etc.)
         }

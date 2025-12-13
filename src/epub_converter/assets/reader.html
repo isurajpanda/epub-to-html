@@ -24,11 +24,21 @@
     {% if metadata.get('author') %}
     <meta property="og:author" content="{{ metadata.get('author') }}">{% endif %}
     <meta property="og:description" content="{{ metadata.get('description', 'Read ' + title + ' online.') }}">
+    {% if metadata.get('cover_image_url') %}
+    <meta property="og:image" content="https://img.lnori.qzz.io/{{ metadata.get('cover_image_url').split('/')[-1] }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://img.lnori.qzz.io/{{ metadata.get('cover_image_url').split('/')[-1] }}">
+    {% endif %}
 
     <!-- Preload critical resources for better performance -->
     <link rel="preload" href="/static/style.css" as="style" crossorigin="anonymous" fetchpriority="high">
     {% if metadata.get('cover_image_url') %}
+    {% if metadata.get('images_compressed') %}
+    <link rel="preload" href="{{ metadata.get('cover_image_url').rsplit('.', 1)[0] }}.avif" as="image" type="image/avif"
+        fetchpriority="high">
+    {% else %}
     <link rel="preload" href="{{ metadata.get('cover_image_url') }}" as="image" fetchpriority="high">
+    {% endif %}
     {% endif %}
 
     <link rel="stylesheet" href="/static/style.css" crossorigin="anonymous">

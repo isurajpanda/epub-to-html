@@ -41,6 +41,8 @@ def main():
                        help='Skip image processing and only generate HTML and static files.')
     parser.add_argument('--cover-only', action='store_true',
                        help='Only generate cover.avif next to each EPUB and exit (no HTML changes).')
+    parser.add_argument('--compress-images', action='store_true',
+                       help='Enable AVIF+JXL image compression (default: False). Generates AVIF and JXL files only (does not copy originals).')
     args = parser.parse_args()
 
     # Detect Python version and threading capabilities
@@ -127,7 +129,7 @@ def main():
     
     print()
 
-    converter = EPUBConverter(args.epub_path, args.output_dir, args.css, no_script=args.no_script, no_image=args.no_image)
+    converter = EPUBConverter(args.epub_path, args.output_dir, args.css, no_script=args.no_script, no_image=args.no_image, compress_images=args.compress_images)
     converter.convert(max_workers=args.max_workers)
 
 if __name__ == "__main__":
