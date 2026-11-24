@@ -1,87 +1,26 @@
-<div align="center">
+# EPUB to HTML | Parallel document converter
 
-# 📚 Ultra-Fast EPUB to HTML Converter
+**Batch conversion of EPUB documents into interactive, browser-readable HTML.**
 
-![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Performance](https://img.shields.io/badge/speedup-10--20x-brightgreen.svg)
-![Threading](https://img.shields.io/badge/threading-GIL--free-orange.svg)
+The project combines EPUB parsing, image processing, HTML templating and configurable parallel execution. Generated readers include themes, navigation and reading preferences.
 
-**A blazing-fast EPUB to HTML converter optimized for processing thousands of EPUB files efficiently**
+## Architecture
 
-[Features](#-key-features) • [Installation](#-installation) • [Usage](#-usage) • [Performance](#-performance) • [Configuration](#-configuration)
+```mermaid
+flowchart LR
+  A[EPUB files] --> B[Parallel conversion]
+  B --> C[Content parser]
+  B --> D[Image processor]
+  C --> E[HTML template]
+  D --> E
+  E --> F[Interactive HTML reader]
+```
 
-</div>
+## Performance
 
----
+Python free-threading and optional optimized libraries are intended to improve throughput. Actual speed depends on hardware, input documents, dependencies and worker settings. No independently verified speedup or Lighthouse score is claimed here. Use the profiling instructions below to measure your own workload.
 
-## 📖 Overview
-
-This project is a **high-performance EPUB to HTML converter** designed for speed and efficiency. It leverages Python 3.13's free-threading capabilities and optimized libraries to process thousands of EPUB files rapidly, delivering a beautiful, interactive HTML reader with advanced features.
-
-### 🎯 What Makes This Special?
-
-- **🚀 10-20x Faster** than traditional converters
-- **🧵 True Multi-Threading** without GIL limitations (Python 3.13+)
-- **🎨 Beautiful Reader UI** with themes, bionic reading, and responsive design
-- **⚡ Optimized Libraries** for every component (images, parsing, JSON)
-- **📱 Mobile-First** with perfect Lighthouse scores
-- **🔧 Highly Configurable** with multiple flags and options
-
----
-
-## ✨ Key Features
-
-### 🚀 Performance Optimizations
-
-| Feature | Technology | Speedup |
-|---------|-----------|---------|
-| **Free-Threading** | Python 3.13 | True multi-threading without GIL |
-| **Image Processing** | pyvips | 10-20x faster than Pillow |
-| **HTML Parsing** | selectolax | 2-3x faster than lxml |
-| **JSON Serialization** | orjson | 2-3x faster than stdlib |
-| **Pattern Matching** | Pre-compiled regex | 30-50% faster |
-| **ZIP Extraction** | zipfile-deflate64 | Reduced overhead |
-| **Parallel Processing** | Multi-level parallelism | Maximum throughput |
-
-### 🎨 Reader Features
-
-- **📱 Responsive Design** - Perfect on desktop, tablet, and mobile
-- **🌈 Multiple Themes** - Ocean, Cyber, Lipstick, Solarized, and more
-- **🔤 Font Customization** - Size, family (Sans-serif, Serif, Monospace, Georgia, Comic Sans, etc.)
-- **👁️ Bionic Reading Mode** - Enhanced reading with selective bolding
-- **📑 Table of Contents** - Collapsible navigation sidebar
-- **⚙️ Settings Panel** - Comprehensive customization options
-- **🖼️ Image Modal** - Full-screen image viewing
-- **💾 Persistent Settings** - Remembers your preferences
-- **🎯 Progress Tracking** - Visual reading progress indicator
-
----
-
-## 📊 Performance
-
-### Expected Results
-
-For **5000 EPUBs** (20-30MB each):
-
-| Configuration | Time | Speedup |
-|---------------|------|---------|
-| **Baseline** (Python 3.11 + Pillow) | 7-14 hours | 1x |
-| **Optimized** (Python 3.11 + optimizations) | 1.5-3 hours | 5-10x |
-| **Ultra-Fast** (Python 3.13 + pyvips) | **30-60 minutes** | **10-20x** |
-
-### Per-File Performance
-
-On a modern 16-core system with Python 3.13 free-threaded:
-
-- **Small EPUBs** (< 5MB): 2-5 seconds each
-- **Medium EPUBs** (5-15MB): 5-15 seconds each  
-- **Large EPUBs** (15-30MB): 15-30 seconds each
-- **Throughput**: 80-150 EPUBs/minute
-
----
-
-## 🛠️ Installation
+## Installation
 
 ### 1️⃣ Python 3.13 Free-Threaded (Recommended)
 
@@ -147,7 +86,6 @@ pip install jinja2 rjsmin rcssmin numpy lxml orjson selectolax zipfile-deflate64
 **Option 3: Quick Start (Pillow Fallback)**
 ```bash
 # Skip pyvips installation - converter will use Pillow automatically
-# Still 5-10x faster than baseline!
 pip install jinja2 rjsmin rcssmin numpy lxml orjson selectolax zipfile-deflate64
 ```
 
@@ -224,7 +162,7 @@ python -m epub_converter "/library/books" --cover-only
 python -m epub_converter "book.epub" --no-script --no-image
 
 # Example 5: Windows batch conversion
-python -m epub_converter "C:\Users\username\Desktop\epubs" --max_workers 100
+python -m epub_converter "C:\path\to\epubs" --max_workers 100
 ```
 
 ---
@@ -264,7 +202,6 @@ epub-to-html/
 │           ├── reader.html      # Reader template with UI components
 │           ├── script.js        # Interactive features (48KB)
 │           └── style.css        # Themes and responsive design (30KB)
-├── test/                        # Test EPUBs and output verification
 ├── README.md                    # This file
 └── .gitignore                   # Git ignore rules
 ```
@@ -365,7 +302,7 @@ pip install selectolax
 
 The converter gracefully degrades if optimized libraries aren't available:
 
-- **pyvips unavailable** → Falls back to Pillow (still 5-10x faster!)
+- **pyvips unavailable** → Falls back to Pillow
 - **selectolax unavailable** → Falls back to lxml/regex
 - **orjson unavailable** → Falls back to stdlib json
 - **Free-threading unavailable** → Uses ProcessPoolExecutor
@@ -411,7 +348,7 @@ python -m epub_converter test_epubs
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
 | **Language** | Python 3.13+ | Free-threading support |
-| **Image Processing** | pyvips / libvips | Ultra-fast image operations |
+| **Image Processing** | pyvips / libvips | Image processing |
 | **HTML Parsing** | selectolax | Fast HTML/XML parsing |
 | **XML Processing** | lxml | EPUB structure parsing |
 | **JSON** | orjson | Fast serialization |
@@ -458,7 +395,7 @@ python -m epub_converter test_epubs
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+The previous documentation indicated MIT licensing, but a LICENSE file was not present in the repository root at review time. Confirm licensing before redistribution.
 
 ---
 
